@@ -1,0 +1,6 @@
+numpy
+matplotlib
+nanonispy
+scipy
+warning
+math
