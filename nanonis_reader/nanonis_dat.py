@@ -4,8 +4,8 @@ class Load:
         import nanonispy as nap
         import os
         self.fname = os.path.basename(filepath)
-        self.header = nap.read.Grid(filepath).header
-        self.signals = nap.read.Grid(filepath).signals
+        self.header = nap.read.Spec(filepath).header
+        self.signals = nap.read.Spec(filepath).signals
 
 class spectrum:
     

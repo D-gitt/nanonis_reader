@@ -3,8 +3,8 @@ class Load:
         import nanonispy as nap
         import os
         self.fname = os.path.basename(filepath)
-        self.header = nap.read.Grid(filepath).header
-        self.signals = nap.read.Grid(filepath).signals
+        self.header = nap.read.Scan(filepath).header
+        self.signals = nap.read.Scan(filepath).signals
         
 
 class topography:
