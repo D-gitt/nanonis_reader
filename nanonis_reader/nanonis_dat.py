@@ -1,4 +1,12 @@
 # Only forward sweeps can be plotted right now. Need to add codes for backward.
+class Load:
+    def __init__(self, filepath):
+        import nanonispy as nap
+        import os
+        self.fname = os.path.basename(filepath)
+        self.header = nap.read.Grid(filepath).header
+        self.signals = nap.read.Grid(filepath).signals
+
 class spectrum:
     
     '''
@@ -39,13 +47,21 @@ class spectrum:
             Returns the tuple: (Bias (V), Current (A))
     '''
     
-    def __init__(self, filepath, sts_channel = 'LI Demod 1 X (A)', sweep_direction = 'fwd'):
-        import nanonispy as nap
-        self.fname = nap.read.Spec(filepath).fname.split('\\')[-1]
-        self.header = nap.read.Spec(filepath).header
-        self.signals = nap.read.Spec(filepath).signals
+    def __init__(self, instance, sts_channel = 'LI Demod 1 X (A)', sweep_direction = 'fwd'):
+        self.fname = instance.fname
+        self.header = instance.header
+        self.signals = instance.signals
         self.channel = sts_channel # 'LI Demod 1 X (A)' or 'LI Demod 2 X (A)'
         self.sweep_dir = sweep_direction # 'fwd' or 'bwd'
+
+    # def __init__(self, filepath, sts_channel = 'LI Demod 1 X (A)', sweep_direction = 'fwd'):
+    #     import nanonispy as nap
+    #     import os
+    #     self.fname = os.path.basename(filepath)
+    #     self.header = nap.read.Spec(filepath).header
+    #     self.signals = nap.read.Spec(filepath).signals
+    #     self.channel = sts_channel # 'LI Demod 1 X (A)' or 'LI Demod 2 X (A)'
+    #     self.sweep_dir = sweep_direction # 'fwd' or 'bwd'
 
     def didv_raw(self, save_all = False):
         '''
@@ -193,12 +209,18 @@ class z_spectrum:
             Returns the tuple: (Z rel (m), Current (A))
     '''
     
-    def __init__(self, filepath, sweep_direction = 'AVG'):
-        import nanonispy as nap
-        self.file = nap.read.NanonisFile(filepath) # Create an object corresponding to a specific data file.
-        self.header = getattr(nap.read, self.file.filetype.capitalize())(self.file.fname).header
-        self.signals = getattr(nap.read, self.file.filetype.capitalize())(self.file.fname).signals
+    def __init__(self, instance, sweep_direction = 'AVG'):
+        self.fname = instance.fname
+        self.header = instance.header
+        self.signals = instance.signals    
         self.sweep_dir = sweep_direction # 'fwd' or 'bwd'
+
+    # def __init__(self, filepath, sweep_direction = 'AVG'):
+    #     import nanonispy as nap
+    #     self.file = nap.read.NanonisFile(filepath) # Create an object corresponding to a specific data file.
+    #     self.header = getattr(nap.read, self.file.filetype.capitalize())(self.file.fname).header
+    #     self.signals = getattr(nap.read, self.file.filetype.capitalize())(self.file.fname).signals
+    #     self.sweep_dir = sweep_direction # 'fwd' or 'bwd'
         
     def get_iz(self): # Better naming is welcome.
         '''
@@ -245,11 +267,11 @@ class z_spectrum:
         
 
 class noise_spectrum:
-    def __init__(self, filepath):
-        import nanonispy as nap
-        self.file = nap.read.NanonisFile(filepath) # Create an object corresponding to a specific data file.
-        self.header = nap.read.Spec.header(filepath)
-        self.signals = nap.read.Spec.signals(filepath)
+
+    def __init__(self, instance):
+        self.fname = instance.fname
+        self.header = instance.header
+        self.signals = instance.signals
     
     def get_noise(self):
         '''

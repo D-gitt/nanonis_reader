@@ -1,8 +1,8 @@
 class Load:
-
     def __init__(self, filepath):
         import nanonispy as nap
-        self.fname = nap.read.Grid(filepath).fname.split('\\')[-1]
+        import os
+        self.fname = os.path.basename(filepath)
         self.header = nap.read.Grid(filepath).header
         self.signals = nap.read.Grid(filepath).signals
 

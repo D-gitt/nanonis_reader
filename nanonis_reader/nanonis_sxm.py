@@ -1,3 +1,12 @@
+class Load:
+    def __init__(self, filepath):
+        import nanonispy as nap
+        import os
+        self.fname = os.path.basename(filepath)
+        self.header = nap.read.Grid(filepath).header
+        self.signals = nap.read.Grid(filepath).signals
+        
+
 class topography:
     
     '''
@@ -53,11 +62,10 @@ class topography:
             containing the dz/dx data, in which x represents the fast scan axis.
     '''
     
-    def __init__(self, filepath):
-        import nanonispy as nap
-        self.fname = nap.read.Scan(filepath).fname.split('/')[-1]
-        self.header = nap.read.Scan(filepath).header
-        self.signals = nap.read.Scan(filepath).signals
+    def __init__(self, instance):
+        self.fname = instance.fname
+        self.header = instance.header
+        self.signals = instance.signals
     
     def get_z(self, processing = 'raw', scan_direction = 'fwd'): # 'fwd' or 'bwd'
         if processing == 'raw':
@@ -223,11 +231,10 @@ class didvmap:
             that represents the dI/dV map data scanned in the direction of scan_direction.
     '''
     
-    def __init__(self, filepath):
-        import nanonispy as nap
-        self.fname = nap.read.Scan(filepath).fname.split('\\')[-1]
-        self.header = nap.read.Scan(filepath).header
-        self.signals = nap.read.Scan(filepath).signals
+    def __init__(self, instance):
+        self.fname = instance.fname
+        self.header = instance.header
+        self.signals = instance.signals
     
     def get_map(self, scan_direction = 'fwd', channel = 'LI_Demod_1_X'):
         if scan_direction == 'fwd':
@@ -264,11 +271,10 @@ class currentmap:
             that represents the current map data scanned in the direction of scan_direction.
     '''
     
-    def __init__(self, filepath):
-        import nanonispy as nap
-        self.fname = nap.read.Scan(filepath).fname.split('\\')[-1]
-        self.header = nap.read.Scan(filepath).header
-        self.signals = nap.read.Scan(filepath).signals
+    def __init__(self, instance):
+        self.fname = instance.fname
+        self.header = instance.header
+        self.signals = instance.signals
     
     def get_map(self, scan_direction = 'fwd'):
         if scan_direction == 'fwd':
@@ -293,11 +299,10 @@ class fft:
         signals : dict
             Measured values in spectrum data.
     '''
-    def __init__(self, filepath):
-        import nanonispy as nap
-        self.fname = nap.read.Scan(filepath).fname.split('/')[-1]
-        self.header = nap.read.Scan(filepath).header
-        self.signals = nap.read.Scan(filepath).signals
+    def __init__(self, instance):
+        self.fname = instance.fname
+        self.header = instance.header
+        self.signals = instance.signals
         
     def two_d_FFT_sqrt(image):
         '''
