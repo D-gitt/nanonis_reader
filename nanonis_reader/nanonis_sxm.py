@@ -199,15 +199,36 @@ class topography:
 
         return z_subpf
     
-    def differentiate (self, scan_direction):
+    # def differentiate (self, scan_direction):
+    #     import numpy as np
+    #     xrange, pixels = round(self.header['scan_range'][0] * 1e9)*1e-9, int(self.header['scan>pixels/line'])
+    #     dx = xrange / pixels
+    #     z = self.raw(scan_direction)
+    #     z_deriv = np.zeros(np.shape(z))
+    #     lines = np.shape(z)[0]
+    #     for i in range(lines):
+    #         z_deriv[i] = np.gradient(z[i], dx, edge_order = 2) # dI/dV curve를 직접 미분. --> d^2I/dV^2
+    #     return z_deriv
+
+    def differentiate(self, scan_direction):
+        """
+        스캔 데이터의 미분을 계산하는 함수
+        
+        Args:
+            scan_direction: 스캔 방향
+        
+        Returns:
+            numpy.ndarray: 미분된 데이터
+        """
         import numpy as np
-        xrange, pixels = round(self.header['scan_range'][0] * 1e9)*1e-9, int(self.header['scan>pixels/line'])
+        
+        xrange = round(self.header['scan_range'][0] * 1e9) * 1e-9
+        pixels = int(self.header['scan>pixels/line'])
         dx = xrange / pixels
-        z = self.raw(scan_direction)
-        z_deriv = np.zeros(np.shape(z))
-        lines = np.shape(z)[0]
-        for i in range(lines):
-            z_deriv[i] = np.gradient(z[i], dx, edge_order = 2) # dI/dV curve를 직접 미분. --> d^2I/dV^2
+        
+        # 전체 배열에 대해 한 번에 gradient 계산
+        z_deriv = np.gradient(self.raw(scan_direction), dx, axis=1, edge_order=2)
+        
         return z_deriv
     
     def subtract_plane_fit (self, scan_direction):
