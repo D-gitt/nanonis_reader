@@ -102,28 +102,54 @@ class topography:
             z_subav[i] = z[i] - np.nanmean(z[i])
         return z_subav
 
-    def subtract_linear_fit (self, scan_direction):
-        import numpy as np
-        from scipy.optimize import curve_fit
-        def f_lin(x, a, b): return a*x + b
-        xrange = round(self.header['scan_range'][0] * 1e9)*1e-9
-        z = self.raw(scan_direction)
-        z_sublf = np.zeros(np.shape(z))
-        lines, pixels = np.shape(z)
-        for i in range(lines):
-            if np.shape(np.where(np.isnan(z))[0])[0] != 0: # image에 nan값이 포함되어 있을 경우 (== scan을 도중에 멈추었을 경우)
-                # if i < np.min(np.where(np.isnan(z))[0]): # nan이 등장하는 line 이전에 대해서 linear fit. 이후는 모두 nan으로 밀기.
-                if i not in set(np.where(np.isnan(z))[0]): # nan이 등장하는 line 만 선택. 방법: nan인 모든 point의 line을 다 불러들인후 list(set()). set은 중복 원소 제거 위함.
-                    x = np.linspace(0, xrange, pixels)
-                    popt, pcov = curve_fit(f_lin, x, z[i])
-                    z_sublf[i] = z[i] - f_lin(x, *popt)
-                else:
-                    z_sublf[i] = np.nan
-            else:
-                x = np.linspace(0, xrange, pixels)
-                popt, pcov = curve_fit(f_lin, x, z[i]) # x - ith line: linear fitting
-                z_sublf[i] = z[i] - f_lin(x, *popt)
+    # def subtract_linear_fit (self, scan_direction):
+    #     import numpy as np
+    #     from scipy.optimize import curve_fit
+    #     def f_lin(x, a, b): return a*x + b
+    #     xrange = round(self.header['scan_range'][0] * 1e9)*1e-9
+    #     z = self.raw(scan_direction)
+    #     z_sublf = np.zeros(np.shape(z))
+    #     lines, pixels = np.shape(z)
+    #     for i in range(lines):
+    #         if np.shape(np.where(np.isnan(z))[0])[0] != 0: # image에 nan값이 포함되어 있을 경우 (== scan을 도중에 멈추었을 경우)
+    #             # if i < np.min(np.where(np.isnan(z))[0]): # nan이 등장하는 line 이전에 대해서 linear fit. 이후는 모두 nan으로 밀기.
+    #             if i not in set(np.where(np.isnan(z))[0]): # nan이 등장하는 line 만 선택. 방법: nan인 모든 point의 line을 다 불러들인후 list(set()). set은 중복 원소 제거 위함.
+    #                 x = np.linspace(0, xrange, pixels)
+    #                 popt, pcov = curve_fit(f_lin, x, z[i])
+    #                 z_sublf[i] = z[i] - f_lin(x, *popt)
+    #             else:
+    #                 z_sublf[i] = np.nan
+    #         else:
+    #             x = np.linspace(0, xrange, pixels)
+    #             popt, pcov = curve_fit(f_lin, x, z[i]) # x - ith line: linear fitting
+    #             z_sublf[i] = z[i] - f_lin(x, *popt)
 
+    #     return z_sublf
+
+    def subtract_linear_fit(self, scan_direction):
+        import numpy as np
+        
+        z = self.raw(scan_direction)
+        lines, pixels = np.shape(z)
+        x = np.arange(pixels)
+        
+        # nan이 있는 행 찾기
+        nan_rows = np.isnan(z).any(axis=1)
+        
+        # 결과 배열 초기화 (nan으로)
+        z_sublf = np.full_like(z, np.nan)
+        
+        # nan이 없는 행들에 대해 처리
+        valid_rows = ~nan_rows
+        valid_z = z[valid_rows]
+        
+        # 한번에 모든 유효한 행에 대해 선형 피팅
+        coeffs = np.polyfit(x, valid_z.T, 1)
+        fitted = (coeffs[0].reshape(-1,1) * x + coeffs[1].reshape(-1,1))
+        
+        # 결과 저장
+        z_sublf[valid_rows] = valid_z - fitted
+        
         return z_sublf
     
     
