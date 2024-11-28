@@ -125,10 +125,50 @@ class DataToPPT:
     def get_dat_parameters(self, data):
         '''
         .dat 파일의 파라미터 추출
+        Z rel (m) 포함 여부에 따라 다른 파라미터 반환
         '''
-        params = {}
-        # .dat 파일에 필요한 파라미터들
-        return params
+        def format_date(date_str):
+            '''
+            일.월.년 시:분:초 형식을 년.월.일 시:분:초 형식으로 변환
+            '''
+            try:
+                # 날짜와 시간 분리
+                date_part, time_part = date_str.split(' ')
+                
+                # 날짜 부분 변환
+                day, month, year = date_part.split('.')
+                formatted_date = f"{year}.{month}.{day}"
+                
+                # 날짜와 시간 다시 합치기
+                return f"{formatted_date}_{time_part}"
+            except:
+                return date_str  # 파싱 실패시 원본 반환
+
+        if 'Z rel (m)' in data.signals.keys():
+            params = {
+                'bias': data.header['Bias>Bias (V)'],
+                'current': data.header['Z-Controller>Setpoint'],
+                'sweep_num': data.header['Bias Spectroscopy>Number of sweeps'],
+                'offset': data.header['Z Spectroscopy>Initial Z-offset (m)'],
+                'sweep_z': data.header['Z Spectroscopy>Sweep distance (m)'],
+                'sweep_num': data.header['Z Spectroscopy>Number of sweeps'],
+                'comment': data.header['Comment01'],
+                'saved_date': format_date(data.header['Saved Date']),
+            }
+            return params
+        else:
+            params = {
+                'bias': data.header['Bias>Bias (V)'],
+                'current': data.header['Z-Controller>Setpoint'],
+                'sweep_start': data.header['Bias Spectroscopy>Sweep Start (V)'],
+                'sweep_end': data.header['Bias Spectroscopy>Sweep End (V)'],
+                'sweep_num': data.header['Bias Spectroscopy>Number of sweeps'],
+                'comment': data.header['Comment01'],
+                'saved_date': format_date(data.header['Saved Date']),
+            }
+            return params
+        
+        
 
     def get_3ds_parameters(self, data):
         '''
@@ -161,8 +201,31 @@ class DataToPPT:
         '''
         .dat 파일의 정보 텍스트 생성
         '''
-        # .dat 파일에 맞는 정보 포맷
-        return 'DAT file parameters'
+        if 'sweep_z' in params:
+            info_texts = []
+            info_texts.append(f"{float(params['bias'])} V /")
+            current = float(params['current'])
+            if abs(current) >= 1e-9:
+                # nA 단위로 표시
+                info_texts.append(f"{current*1e9:.0f} nA")
+            else:
+                # pA 단위로 표시
+                info_texts.append(f"{current*1e12:.0f} pA")
+            info_texts.append(f"\n({params['saved_date']})")
+        else:
+            info_texts = []
+            info_texts.append(f"{float(params['bias'])} V /")
+            current = float(params['current'])
+            if abs(current) >= 1e-9:
+                # nA 단위로 표시
+                info_texts.append(f"{current*1e9:.0f} nA")
+            else:
+                # pA 단위로 표시
+                info_texts.append(f"{current*1e12:.0f} pA")
+            info_texts.append(f"\n{float(params['sweep_start'])} V to {float(params['sweep_end'])} V (sweeps: {params['sweep_num']})")
+            info_texts.append(f"\n({params['saved_date']})")
+        
+        return " ".join(info_texts)
 
     def get_3ds_info_text(self, params):
         '''
@@ -268,16 +331,76 @@ class DataToPPT:
         '''
         .dat 파일 처리 함수
         '''
-        # 그래프 생성
-        plt.figure(figsize=(10, 8))
-        # 여기에 그래프 생성 코드 추가
-        # 예: plt.plot(data.x, data.y) 등
+        params = self.get_dat_parameters(data)
+        base_size = 5
+        figsize = (base_size, base_size)
+
+        if 'sweep_z' in params:
+            spec = nr.nanonis_dat.z_spectrum(data)
+
+            # Z-I linear
+            spec_z = spec.get_iz()
+            plt.figure(figsize=figsize)
+            plt.plot(spec_z[0] * 1e9, spec_z[1] * 1e9, 'k-')
+            plt.xlabel('Z (nm)')
+            plt.ylabel('Current (nA)')
+            img_stream1 = io.BytesIO()
+            plt.savefig(img_stream1, format='png', bbox_inches='tight', pad_inches=0.1)
+            img_stream1.seek(0)
+            plt.close
+
+            # Z-I log
+            plt.figure(figsize=figsize)
+            plt.plot(spec_z[0] * 1e9, np.abs(spec_z[1] * 1e9), 'k-')
+            plt.xlabel('Z (nm)')
+            plt.ylabel('|Current| (nA)')
+            plt.yscale('log')
+            plt.grid(True)
+            img_stream2 = io.BytesIO()
+            plt.savefig(img_stream2, format='png', bbox_inches='tight', pad_inches=0.1)
+            img_stream2.seek(0)
+            plt.close
+
+            return img_stream1, img_stream2
         
-        img_stream = io.BytesIO()
-        plt.savefig(img_stream, format='png', bbox_inches='tight')
-        img_stream.seek(0)
-        plt.close()
-        return img_stream
+        else:
+            spec = nr.nanonis_dat.spectrum(data)
+
+            # Scaled dI/dV
+            didv_scaled = spec.didv_scaled()
+            plt.figure(figsize=figsize)
+            plt.plot(didv_scaled[0], didv_scaled[1] * 1e9, 'k-')
+            plt.xlabel('Bias (V)')
+            plt.ylabel('dI/dV (nS)')
+            img_stream1 = io.BytesIO()
+            plt.savefig(img_stream1, format='png', bbox_inches='tight', pad_inches=0.1)
+            img_stream1.seek(0)
+            plt.close
+
+            # Normalized dI/dV
+            didv_norm = spec.didv_normalized()
+            plt.figure(figsize=figsize)
+            plt.plot(didv_norm[0], didv_norm[1], 'k-')
+            plt.xlabel('Bias (V)')
+            plt.ylabel('Norm. dI/dV')
+            img_stream2 = io.BytesIO()
+            plt.savefig(img_stream2, format='png', bbox_inches='tight', pad_inches=0.1)
+            img_stream2.seek(0)
+            plt.close
+
+            # I-V
+            iv = spec.iv_raw()
+            plt.figure(figsize=figsize)
+            plt.plot(iv[0], iv[1] * 1e12, 'k-')
+            plt.xlabel('Bias (V)')
+            plt.ylabel('Current (pA)')
+            img_stream3 = io.BytesIO()
+            plt.savefig(img_stream3, format='png', bbox_inches='tight', pad_inches=0.1)
+            img_stream3.seek(0)
+            plt.close
+
+
+            return img_stream1, img_stream2, img_stream3    
     
     def process_3ds_file(self, data):
         '''
@@ -335,10 +458,28 @@ class DataToPPT:
             info_text = self.get_sxm_info_text(params)
 
         elif data.fname.endswith('.dat'):
-            params = self.get_scan_parameters(data)
+            params = self.get_dat_parameters(data)
+            
+            base_size = 3.2
+            width = Inches(base_size)
+            height = Inches(base_size)
+            img_top = Inches(1.5)
+
+            if 'sweep_z' in params:
+                img_stream1, img_stream2 = self.process_dat_file(data)
+                slide.shapes.add_picture(img_stream1, Inches(0), img_top, width=width)
+                slide.shapes.add_picture(img_stream2, Inches(0 + base_size * 1.02), img_top, width=width)
+            else:
+                img_stream1, img_stream2, img_stream3 = self.process_dat_file(data)
+                slide.shapes.add_picture(img_stream1, Inches(0), img_top, width=width)
+                slide.shapes.add_picture(img_stream2, Inches(0 + base_size * 1.02), 
+                                         img_top, width=width)
+                slide.shapes.add_picture(img_stream3, Inches(0 + base_size * 2.04), 
+                                         img_top, width=width)
+
+            text_top = img_top + height + Inches(0.2)  # 0.2인치 간격
             info_text = self.get_dat_info_text(params)
-            text_top = Inches(6)
-            img_stream = self.process_dat_file(data)
+            
         elif data.fname.endswith('.3ds'):
             params = self.get_scan_parameters(data)
             info_text = self.get_3ds_info_text(params)
@@ -375,9 +516,3 @@ class DataToPPT:
         save_path = self.base_path + 'PPT/'
         self.prs.save(save_path + self.output_filename)
         print(f"PPT has been saved as {save_path + self.output_filename}")
-
-# 사용 예시
-if __name__ == "__main__":
-    path = "/Users/taemin/SynologyDrive/Cu100_oxidation_2024_01_08/"
-    ppt_maker = DataToPPT(path, 2360, 2390, keyword='Cu', output_filename='Cu100_raw_data.pptx')
-    ppt_maker.generate_ppt()
