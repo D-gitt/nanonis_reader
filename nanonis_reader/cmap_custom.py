@@ -1,8 +1,12 @@
 def nanox():
     import numpy as np
     import matplotlib.colors as clr
-    return clr.LinearSegmentedColormap.from_list('nanox', \
+    cmap = clr.LinearSegmentedColormap.from_list('nanox', \
                                                  np.array([(0, 0, 0), (115, 33, 0), (180, 119, 0), (255, 255, 255)])/255, N=256)
+    cmap.set_over('r')
+    cmap.set_under('b')
+
+    return cmap
 
 def bwr():
     import matplotlib.colors as clr
