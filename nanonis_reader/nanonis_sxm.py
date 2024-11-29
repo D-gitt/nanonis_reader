@@ -1,7 +1,13 @@
+import nanonispy as nap
+import os
+import warnings
+import numpy as np
+from scipy.optimize import curve_fit
+from scipy.linalg import lstsq
+
+
 class Load:
     def __init__(self, filepath):
-        import nanonispy as nap
-        import os
         self.fname = os.path.basename(filepath)
         self.header = nap.read.Scan(filepath).header
         self.signals = nap.read.Scan(filepath).signals
@@ -92,8 +98,6 @@ class topography:
         return z
     
     def subtract_average (self, scan_direction):
-        import warnings
-        import numpy as np
         warnings.filterwarnings(action='ignore')
         z = self.raw(scan_direction)
         z_subav = np.zeros(np.shape(z))
@@ -126,9 +130,7 @@ class topography:
 
     #     return z_sublf
 
-    def subtract_linear_fit(self, scan_direction):
-        import numpy as np
-        
+    def subtract_linear_fit(self, scan_direction):        
         z = self.raw(scan_direction)
         lines, pixels = np.shape(z)
         x = np.arange(pixels)
@@ -153,9 +155,7 @@ class topography:
         return z_sublf
     
     
-    def subtract_linear_fit_xy (self, scan_direction):
-        import numpy as np
-        from scipy.optimize import curve_fit
+    def subtract_linear_fit_xy (self, scan_direction):       
         def f_lin(x, a, b): return a*x + b
         xrange = round(self.header['scan_range'][0] * 1e9)*1e-9
         z = self.subtract_linear_fit(scan_direction)
@@ -177,8 +177,6 @@ class topography:
         return z_sublf.T
 
     def subtract_parabolic_fit (self, scan_direction):
-        import numpy as np
-        from scipy.optimize import curve_fit
         def f_parab(x, a, b, c): return a*(x**2) + b*x + c
         xrange = round(self.header['scan_range'][0] * 1e9)*1e-9
         z = self.raw(scan_direction)
@@ -219,9 +217,7 @@ class topography:
         
         Returns:
             numpy.ndarray: 미분된 데이터
-        """
-        import numpy as np
-        
+        """        
         xrange = round(self.header['scan_range'][0] * 1e9) * 1e-9
         pixels = int(self.header['scan>pixels/line'])
         dx = xrange / pixels
@@ -231,10 +227,7 @@ class topography:
         
         return z_deriv
     
-    def subtract_plane_fit (self, scan_direction):
-        import numpy as np
-        from scipy.linalg import lstsq
-        
+    def subtract_plane_fit (self, scan_direction):      
         # regular grid covering the domain of the data
         Z = self.raw(scan_direction)
         X, Y = np.meshgrid( np.arange(np.shape(Z)[1]), np.arange(np.shape(Z)[0]) )
@@ -327,7 +320,6 @@ class currentmap:
         if scan_direction == 'fwd':
             current = self.signals['Current']['forward']
         elif scan_direction == 'bwd':
-            import numpy as np
             current = np.flip(self.signals['Current']['backward'], axis = 1)
         return current
 
@@ -363,7 +355,6 @@ class fft:
         image_fit : 2D numpy output
         Check the scale bar
         '''
-        import numpy as np
         fft = np.fft.fft2(image) # FFT only
         fft_shift = np.fft.fftshift(fft) #2D FFT 를 위한 image shift
         image_fft = np.sqrt(np.abs(fft_shift))
@@ -381,7 +372,6 @@ class fft:
         image_fit : 2D numpy output
         Check the scale bar
         '''
-        import numpy as np
         fft = np.fft.fft2(image) # FFT only
         fft_shift = np.fft.fftshift(fft) #2D FFT 를 위한 image shift
         image_fft = np.log(np.abs(fft_shift))
@@ -399,7 +389,6 @@ class fft:
         image_fit : 2D numpy output
         Check the scale bar
         '''
-        import numpy as np
         fft = np.fft.fft2(image) # FFT only
         fft_shift = np.fft.fftshift(fft) #2D FFT 를 위한 image shift
         image_fft = np.abs(fft_shift)
