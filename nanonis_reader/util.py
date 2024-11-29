@@ -65,17 +65,13 @@ class NanonisData:
             raise ValueError(f"Unsupported file extension: {extension}")
 
 class DataToPPT:
-    def __init__(self, base_path, start_num, end_num, keyword=None, output_filename='output.pptx'):
+    def __init__(self, base_path, keyword=None, output_filename='output.pptx'):
         '''
         base_path: 파일들이 있는 경로
-        start_num: 시작 파일 번호
-        end_num: 끝 파일 번호
         keyword: 파일 이름 필터 (예: 'Au', 'SiCG')
         output_filename: 생성될 PPT 파일 이름
         '''
         self.base_path = base_path
-        self.start_num = start_num
-        self.end_num = end_num
         self.keyword = keyword
         self.output_filename = output_filename
         self.prs = Presentation()
@@ -152,21 +148,58 @@ class DataToPPT:
                 'offset': data.header['Z Spectroscopy>Initial Z-offset (m)'],
                 'sweep_z': data.header['Z Spectroscopy>Sweep distance (m)'],
                 'sweep_num': data.header['Z Spectroscopy>Number of sweeps'],
-                'comment': data.header['Comment01'],
+                # 'comment': data.header['Comment01'],
+                'comment': (
+                    data.header.get('Comment01') or
+                    data.header.get('comment') or
+                    data.header.get('Comment') or
+                    ''
+                ),
                 'saved_date': format_date(data.header['Saved Date']),
             }
-            return params
+            # return params
+        
+        elif 'Frequency (Hz)' in data.signals.keys():
+            params ={
+                'bias': data.header['Bias>Bias (V)'],
+                'current': data.header['Z-Controller>Setpoint'],
+                'feedback': data.header['Z-Controller>Controller status'],
+                'saved_date': format_date(data.header['Saved Date']),
+                'comment': (
+                    data.header.get('Comment01') or
+                    data.header.get('comment') or
+                    data.header.get('Comment') or
+                    ''
+                ),
+            }
+
         else:
             params = {
                 'bias': data.header['Bias>Bias (V)'],
                 'current': data.header['Z-Controller>Setpoint'],
-                'sweep_start': data.header['Bias Spectroscopy>Sweep Start (V)'],
-                'sweep_end': data.header['Bias Spectroscopy>Sweep End (V)'],
-                'sweep_num': data.header['Bias Spectroscopy>Number of sweeps'],
-                'comment': data.header['Comment01'],
+                'sweep_start': (
+                    data.header.get('Bias Spectroscopy>Sweep Start (V)') or
+                    ''
+                ),
+                'sweep_end': (
+                    data.header.get('Bias Spectroscopy>Sweep End (V)') or
+                    ''
+                ),
+                # 'sweep_num': data.header['Bias Spectroscopy>Number of sweeps'],
+                'sweep_num': (
+                    data.header.get('Bias Spectroscopy>Number of sweeps') or
+                    ''
+                ),
+                'comment': (
+                    data.header.get('Comment01') or
+                    data.header.get('comment') or
+                    data.header.get('Comment') or
+                    ''
+                ),
                 'saved_date': format_date(data.header['Saved Date']),
             }
-            return params
+        
+        return params
         
         
 
@@ -174,8 +207,31 @@ class DataToPPT:
         '''
         .3ds 파일의 파라미터 추출
         '''
-        params = {}
-        # .3ds 파일에 필요한 파라미터들
+        def format_date(date_str):
+            '''
+            일.월.년 시:분:초 형식을 년.월.일 시:분:초 형식으로 변환
+            '''
+            try:
+                # 날짜와 시간 분리
+                date_part, time_part = date_str.split(' ')
+                
+                # 날짜 부분 변환
+                day, month, year = date_part.split('.')
+                formatted_date = f"{year}.{month}.{day}"
+                
+                # 날짜와 시간 다시 합치기
+                return f"{formatted_date}_{time_part}"
+            except:
+                return date_str  # 파싱 실패시 원본 반환
+            
+        params = {
+                'bias': data.header['Bias>Bias (V)'],
+                'current': data.header['Z-Controller>Setpoint'],
+                'pixel': data.header['dim_px'],
+                'range': data.header['size_xy'],
+                'comment': data.header['comment'],  
+        }
+        
         return params
     
     def get_sxm_info_text(self, params):
@@ -211,6 +267,11 @@ class DataToPPT:
             else:
                 # pA 단위로 표시
                 info_texts.append(f"{current*1e12:.0f} pA")
+            info_texts.append(f"\nComment: {params['comment']}")    
+            info_texts.append(f"\n({params['saved_date']})")
+        elif 'feedback' in params:
+            info_texts = []
+            info_texts.append(f"Comment: {params['comment']}")
             info_texts.append(f"\n({params['saved_date']})")
         else:
             info_texts = []
@@ -223,6 +284,7 @@ class DataToPPT:
                 # pA 단위로 표시
                 info_texts.append(f"{current*1e12:.0f} pA")
             info_texts.append(f"\n{float(params['sweep_start'])} V to {float(params['sweep_end'])} V (sweeps: {params['sweep_num']})")
+            info_texts.append(f"\nComment: {params['comment']}")
             info_texts.append(f"\n({params['saved_date']})")
         
         return " ".join(info_texts)
@@ -275,7 +337,7 @@ class DataToPPT:
         img_stream1 = io.BytesIO()
         plt.savefig(img_stream1, format='png', bbox_inches='tight', pad_inches=0.01)
         img_stream1.seek(0)
-        plt.close()
+        # plt.close('all')
 
         # 두 번째 이미지 (differentiated)
         fig = plt.figure(figsize=figsize)
@@ -301,7 +363,7 @@ class DataToPPT:
         img_stream2 = io.BytesIO()
         plt.savefig(img_stream2, format='png', bbox_inches='tight', pad_inches=0.01)
         img_stream2.seek(0)
-        plt.close()
+        # plt.close('all')
 
         if 'LI_Demod_1_X' in data.signals.keys():
             fig = plt.figure(figsize=figsize)
@@ -321,7 +383,7 @@ class DataToPPT:
             img_stream3 = io.BytesIO()
             plt.savefig(img_stream3, format='png', bbox_inches='tight', pad_inches=0.01)
             img_stream3.seek(0)
-            plt.close()
+            # plt.close('all')
             
             return img_stream1, img_stream2, img_stream3
 
@@ -340,17 +402,17 @@ class DataToPPT:
 
             # Z-I linear
             spec_z = spec.get_iz()
-            plt.figure(figsize=figsize)
+            fig = plt.figure(figsize=figsize)
             plt.plot(spec_z[0] * 1e9, spec_z[1] * 1e9, 'k-')
             plt.xlabel('Z (nm)')
             plt.ylabel('Current (nA)')
             img_stream1 = io.BytesIO()
             plt.savefig(img_stream1, format='png', bbox_inches='tight', pad_inches=0.1)
             img_stream1.seek(0)
-            plt.close
+            # plt.close('all')
 
             # Z-I log
-            plt.figure(figsize=figsize)
+            fig = plt.figure(figsize=figsize)
             plt.plot(spec_z[0] * 1e9, np.abs(spec_z[1] * 1e9), 'k-')
             plt.xlabel('Z (nm)')
             plt.ylabel('|Current| (nA)')
@@ -359,48 +421,116 @@ class DataToPPT:
             img_stream2 = io.BytesIO()
             plt.savefig(img_stream2, format='png', bbox_inches='tight', pad_inches=0.1)
             img_stream2.seek(0)
-            plt.close
+            # plt.close('all')
 
             return img_stream1, img_stream2
         
-        else:
-            spec = nr.nanonis_dat.spectrum(data)
+        elif 'Frequency (Hz)' in data.signals.keys():
+            spec = nr.nanonis_dat.noise_spectrum(data)
 
-            # Scaled dI/dV
-            didv_scaled = spec.didv_scaled()
-            plt.figure(figsize=figsize)
-            plt.plot(didv_scaled[0], didv_scaled[1] * 1e9, 'k-')
-            plt.xlabel('Bias (V)')
-            plt.ylabel('dI/dV (nS)')
+            # Noise spectrum
+            spec_noise = spec.get_noise()
+            if 'Current PSD (A/sqrt(Hz))' in data.signals.keys():
+                plt.plot(spec_noise[0], spec_noise[1]*1e15, 'k-')
+                plt.xlabel('Frequency (Hz)')
+                plt.ylabel('Current (fA)')
+                plt.yscale('log')
+                plt.grid(True)
+            else:
+                plt.plot(spec_noise[0], spec_noise[1]*1e12, 'k-')
+                plt.xlabel('Frequency (Hz)')
+                plt.ylabel('Z (pm)')
+                plt.yscale('log')
+                plt.grid(True)
             img_stream1 = io.BytesIO()
             plt.savefig(img_stream1, format='png', bbox_inches='tight', pad_inches=0.1)
             img_stream1.seek(0)
-            plt.close
 
-            # Normalized dI/dV
-            didv_norm = spec.didv_normalized()
-            plt.figure(figsize=figsize)
-            plt.plot(didv_norm[0], didv_norm[1], 'k-')
-            plt.xlabel('Bias (V)')
-            plt.ylabel('Norm. dI/dV')
-            img_stream2 = io.BytesIO()
-            plt.savefig(img_stream2, format='png', bbox_inches='tight', pad_inches=0.1)
-            img_stream2.seek(0)
-            plt.close
-
-            # I-V
-            iv = spec.iv_raw()
-            plt.figure(figsize=figsize)
-            plt.plot(iv[0], iv[1] * 1e12, 'k-')
-            plt.xlabel('Bias (V)')
-            plt.ylabel('Current (pA)')
-            img_stream3 = io.BytesIO()
-            plt.savefig(img_stream3, format='png', bbox_inches='tight', pad_inches=0.1)
-            img_stream3.seek(0)
-            plt.close
+            return img_stream1
 
 
-            return img_stream1, img_stream2, img_stream3    
+       
+        else:
+            spec = nr.nanonis_dat.spectrum(data)
+            bias_values = spec.iv_raw()[0]
+            signs = np.sign(bias_values)
+
+            if np.any(signs < 0) and np.any(signs > 0):
+                # Scaled dI/dV
+                didv_scaled = spec.didv_scaled()
+                fig = plt.figure(figsize=figsize)
+                plt.plot(didv_scaled[0], didv_scaled[1] * 1e9, 'k-')
+                plt.xlabel('Bias (V)')
+                plt.ylabel('dI/dV (nS)')
+                img_stream1 = io.BytesIO()
+                plt.savefig(img_stream1, format='png', bbox_inches='tight', pad_inches=0.1)
+                img_stream1.seek(0)
+                # plt.close('all')
+
+                # Normalized dI/dV
+                didv_norm = spec.didv_normalized()
+                fig = plt.figure(figsize=figsize)
+                plt.plot(didv_norm[0], didv_norm[1], 'k-')
+                plt.xlabel('Bias (V)')
+                plt.ylabel('Norm. dI/dV')
+                img_stream2 = io.BytesIO()
+                plt.savefig(img_stream2, format='png', bbox_inches='tight', pad_inches=0.1)
+                img_stream2.seek(0)
+                # plt.close('all')
+
+                # I-V
+                fig = plt.figure(figsize=figsize)
+                iv = spec.iv_raw()
+                plt.plot(iv[0], iv[1] * 1e12, 'k-')
+                plt.xlabel('Bias (V)')
+                plt.ylabel('Current (pA)')
+                img_stream3 = io.BytesIO()
+                plt.savefig(img_stream3, format='png', bbox_inches='tight', pad_inches=0.1)
+                img_stream3.seek(0)
+                # plt.close('all')
+
+
+                return img_stream1, img_stream2, img_stream3
+
+            else:
+                # dI/dV raw
+                didv_raw = spec.didv_raw()
+                fig = plt.figure(figsize=figsize)
+                plt.plot(didv_raw[0], didv_raw[1] * 1e12, 'k-')
+                plt.xlabel('Bias (V)')
+                plt.ylabel('dI/dV (arb.)')
+                img_stream1 = io.BytesIO()
+                plt.savefig(img_stream1, format='png', bbox_inches='tight', pad_inches=0.1)
+                img_stream1.seek(0)
+                # plt.close('all')
+
+                # I-V
+                iv = spec.iv_raw()
+                fig = plt.figure(figsize=figsize)
+                plt.plot(iv[0], iv[1] * 1e12, 'k-')
+                plt.xlabel('Bias (V)')
+                plt.ylabel('Current (pA)')
+                img_stream2 = io.BytesIO()
+                plt.savefig(img_stream2, format='png', bbox_inches='tight', pad_inches=0.1)
+                img_stream2.seek(0)
+                # plt.close('all')
+
+                if 'Z (m)' in data.signals.keys():
+                    # dZ/dV
+                    dzdv = spec.dzdv_numerical()
+                    fig = plt.figure(figsize=figsize)
+                    plt.plot(dzdv[0], dzdv[1], 'k-')
+                    plt.xlabel('Bias (V)')
+                    plt.ylabel('dZ/dV (nm/V)')
+                    img_stream3 = io.BytesIO()
+                    plt.savefig(img_stream3, format='png', bbox_inches='tight', pad_inches=0.1)
+                    img_stream3.seek(0)
+                    # plt.close('all')
+
+                    return img_stream1, img_stream2, img_stream3
+                
+                return img_stream1, img_stream2
+
     
     def process_3ds_file(self, data):
         '''
@@ -413,7 +543,7 @@ class DataToPPT:
         img_stream = io.BytesIO()
         plt.savefig(img_stream, format='png', bbox_inches='tight')
         img_stream.seek(0)
-        plt.close()
+        # plt.close('all')
         return img_stream
     
     def add_slide(self, data):
@@ -469,6 +599,9 @@ class DataToPPT:
                 img_stream1, img_stream2 = self.process_dat_file(data)
                 slide.shapes.add_picture(img_stream1, Inches(0), img_top, width=width)
                 slide.shapes.add_picture(img_stream2, Inches(0 + base_size * 1.02), img_top, width=width)
+            elif 'Frequency (Hz)' in data.signals.keys():
+                img_stream1 = self.process_dat_file(data)
+                slide.shapes.add_picture(img_stream1, Inches(0), img_top, width=width)
             else:
                 img_stream1, img_stream2, img_stream3 = self.process_dat_file(data)
                 slide.shapes.add_picture(img_stream1, Inches(0), img_top, width=width)
@@ -493,13 +626,72 @@ class DataToPPT:
         tf = txBox.text_frame
         tf.text = info_text if info_text else "No parameters available"
 
+    def find_max_file_number(self):
+        '''
+        현재 경로에서 가장 큰 파일 번호 찾기
+        '''
+        import glob
+        import os
+
+        pattern = os.path.join(self.base_path, f'*{self.keyword if self.keyword else ""}*.*')
+        files = glob.glob(pattern)
+        
+        max_num = 0
+        for file in files:
+            try:
+                # 파일 이름에서 숫자 추출
+                num_str = file.split('_')[-1].split('.')[0]
+                num = int(num_str)
+                max_num = max(max_num, num)
+            except:
+                continue
+                
+        return max_num
+
     def generate_ppt(self):
         '''
         PPT 생성 메인 함수
         '''
-        print(f"Generating PPT for files {self.start_num} to {self.end_num}...")
+        # 최대 파일 번호 찾기
+        max_num = self.find_max_file_number()
+        print(f"\nMaximum file number in directory: {max_num}")
         
-        for i in range(self.start_num, self.end_num + 1):
+        # 사용자 입력 받기
+        while True:
+            try:
+                start = input("\nEnter start number (or 'q' to quit): ")
+                if start.lower() == 'q':
+                    print("Cancelled by user")
+                    return
+                start = int(start)
+                
+                end = input("Enter end number (or 'q' to quit): ")
+                if end.lower() == 'q':
+                    print("Cancelled by user")
+                    return
+                end = int(end)
+                
+                if start > end:
+                    print("Start number should be less than end number")
+                    continue
+                if end > max_num:
+                    print(f"Warning: End number ({end}) is larger than maximum file number ({max_num})")
+                    proceed = input("Do you want to proceed anyway? (y/n): ")
+                    if proceed.lower() != 'y':
+                        continue
+                
+                break
+            except ValueError:
+                print("Please enter valid numbers (or 'q' to quit)")
+        
+        proceed = input(f"\nGenerate PPT for files {start} to {end}? (y/n): ")
+        if proceed.lower() != 'y':
+            print("Operation cancelled")
+            return
+            
+        print(f"\nGenerating PPT for files {start} to {end}...")
+        
+        for i in range(start, end + 1):
             try:
                 # 파일 로드
                 data = NanonisData(self.base_path, i, self.keyword)
@@ -507,12 +699,16 @@ class DataToPPT:
                 
                 # 슬라이드 추가
                 self.add_slide(data)
+                plt.close('all')
                 
             except ValueError as e:
                 print(f"Skipping number {i}: {str(e)}")
+                plt.close('all')
                 continue
         
         # PPT 저장
         save_path = self.base_path + 'PPT/'
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
         self.prs.save(save_path + self.output_filename)
-        print(f"PPT has been saved as {save_path + self.output_filename}")
+        print(f"\nPPT has been saved as {save_path + self.output_filename}")
