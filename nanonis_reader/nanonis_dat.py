@@ -1,8 +1,13 @@
+import nanonispy as nap
+import numpy as np
+import os
+from scipy.optimize import curve_fit
+from scipy.integrate import cumtrapz
+
+
 # Only forward sweeps can be plotted right now. Need to add codes for backward.
 class Load:
     def __init__(self, filepath):
-        import nanonispy as nap
-        import os
         self.fname = os.path.basename(filepath)
         self.header = nap.read.Spec(filepath).header
         self.signals = nap.read.Spec(filepath).signals
@@ -63,109 +68,72 @@ class spectrum:
     #     self.channel = sts_channel # 'LI Demod 1 X (A)' or 'LI Demod 2 X (A)'
     #     self.sweep_dir = sweep_direction # 'fwd' or 'bwd'
 
-    def didv_raw(self, save_all = False):
+    def didv_raw(self):
         '''
         Returns
         -------
         tuple
             (Bias (V), raw dIdV (a.u.))
         '''
-        import numpy as np
-        if save_all == False:
-            return self.signals['Bias calc (V)'], self.signals[self.channel]
+        if 'Current [AVG] (A)' in self.signals.keys():
+            avg_channel = self.channel.replace(' (A)', ' [AVG] (A)')
+            return self.signals['Bias calc (V)'], self.signals[avg_channel]
         else:
-            didv = np.array([self.signals[channel] \
-                             for channel in np.sort(list(self.signals.keys())) \
-                             if ('LI Demod 2 X' in channel) & ('LI Demod 2 X [AVG]' not in channel)])
-            return self.signals['Bias calc (V)'], didv
+            return self.signals['Bias calc (V)'], self.signals[self.channel]
     
-    def didv_scaled(self, save_all = False):
+    def didv_scaled(self):
         '''
         Returns
         -------
         tuple
             (Bias (V), dIdV (S))
         '''
-        import numpy as np
-        if save_all == False:
-            return self.signals['Bias calc (V)'], np.median(self.didv_numerical()[1]/self.signals[self.channel])*self.signals[self.channel]
+        if 'Current [AVG] (A)' in self.signals.keys():
+            avg_channel = self.channel.replace(' (A)', ' [AVG] (A)')
+            return self.signals['Bias calc (V)'], np.median(self.didv_numerical()[1]/self.signals[avg_channel])*self.signals[avg_channel]
         else:
-            medians = np.median(self.didv_numerical(save_all)[1]/self.didv_raw(save_all)[1], axis=1)
-            didv = np.array([medians[i]*self.didv_raw(save_all)[1][i] for i in range(len(medians))])
-            return self.signals['Bias calc (V)'], didv
+            return self.signals['Bias calc (V)'], np.median(self.didv_numerical()[1]/self.signals[self.channel])*self.signals[self.channel]
 
     
-    def didv_numerical(self, save_all = False):
+    def didv_numerical(self):
         '''
         Returns
         -------
         tuple
             (Bias (V), numerical dIdV (S))
         '''        
-        import numpy as np
         step = self.signals['Bias calc (V)'][1] - self.signals['Bias calc (V)'][0]
-        if save_all == False:
-            didv = np.gradient(self.signals['Current (A)'], step, edge_order=2) # I-V curve를 직접 미분.
+        if 'Current [AVG] (A)' in self.signals.keys():
+            didv = np.gradient(self.signals['Current [AVG] (A)'], step, edge_order=2) # I-V curve를 직접 미분.
             return self.signals['Bias calc (V)'], didv
         else:
-            didv = np.array([np.gradient(self.signals[channel], step, edge_order=2) \
-                             for channel in np.sort(list(self.signals.keys())) \
-                             if ('Current' in channel) & ('Current [AVG]' not in channel)])
+            didv = np.gradient(self.signals['Current (A)'], step, edge_order=2) # I-V curve를 직접 미분.
             return self.signals['Bias calc (V)'], didv
     
-    def didv_normalized(self, factor=0.2, save_all = False):
+    def didv_normalized(self, factor=0.2):
         '''
         Returns
         -------
         tuple
             (Bias (V), normalized dIdV)
-        '''        
-        import numpy as np
-        from scipy.optimize import curve_fit
-        from scipy.integrate import cumtrapz
-        
-        if save_all == False:
-            # dIdV, V = self.signals[a.channel], self.signals['Bias calc (V)']
-            V, dIdV = self.didv_scaled()
-            I_cal = cumtrapz(dIdV, V, initial = 0)
-            zero = np.argwhere ( abs(V) == np.min(abs(V)) )[0, 0] # The index where V = 0 or nearest to 0.
-            popt, pcov = curve_fit (lambda x, a, b: a*x + b, V[zero-1:zero+2], I_cal[zero-1:zero+2])
-            I_cal -= popt[1]
+        '''               
+        # dIdV, V = self.signals[a.channel], self.signals['Bias calc (V)']
+        V, dIdV = self.didv_scaled()
+        I_cal = cumtrapz(dIdV, V, initial = 0)
+        zero = np.argwhere ( abs(V) == np.min(abs(V)) )[0, 0] # The index where V = 0 or nearest to 0.
+        popt, pcov = curve_fit (lambda x, a, b: a*x + b, V[zero-1:zero+2], I_cal[zero-1:zero+2])
+        I_cal -= popt[1]
 
-            # get total conductance I/V
-            with np.errstate(divide='ignore'): # Ignore the warning of 'division by zero'.
-                IV_cal = I_cal/V
+        # get total conductance I/V
+        with np.errstate(divide='ignore'): # Ignore the warning of 'division by zero'.
+            IV_cal = I_cal/V
 
-            # Normalized_dIdV = dIdV / IV_cal
-            # return np.delete(V, zero), np.delete(Normalized_dIdV, zero)
+        # Normalized_dIdV = dIdV / IV_cal
+        # return np.delete(V, zero), np.delete(Normalized_dIdV, zero)
 
-            delta = factor*np.median(IV_cal)
-            Normalized_dIdV = dIdV / np.sqrt(np.square(delta) + np.square(IV_cal))
-            return V, Normalized_dIdV
-
-        else:
-            # dIdV, V = self.signals[a.channel], self.signals['Bias calc (V)']
-            V, dIdV = self.didv_scaled(save_all)
-            I_cal = cumtrapz(dIdV, V, initial = 0)
-            zero = np.argwhere ( abs(V) == np.min(abs(V)) )[0, 0] # The index where V = 0 or nearest to 0.
-            for i in range(len(I_cal)):
-                popt, pcov = curve_fit (lambda x, a, b: a*x + b, V[zero-1:zero+2], I_cal[i][zero-1:zero+2])
-                I_cal[i] -= popt[1]
-
-            # get total conductance I/V
-            with np.errstate(divide='ignore'): # Ignore the warning of 'division by zero'.
-                IV_cal = I_cal/V
-
-            # Normalized_dIdV = dIdV / IV_cal
-            # return np.delete(V, zero), np.delete(Normalized_dIdV, zero)
-
-            delta = factor*np.median(I_cal, axis=1)
-            for i in range(len(delta)):
-                # Normalized_dIdV[i] = dIdV[i] / np.sqrt(np.square(delta[i]) + np.square(IV_cal[i]))
-                dIdV[i] /= np.sqrt(np.square(delta[i]) + np.square(IV_cal[i]))
-            # return V, Normalized_dIdV
-            # return V, dIdV
-            return np.delete(V, zero), np.delete(dIdV, zero, axis = 1)
+        delta = factor*np.median(IV_cal)
+        Normalized_dIdV = dIdV / np.sqrt(np.square(delta) + np.square(IV_cal))
+        return V, Normalized_dIdV
     
     def iv_raw(self, save_all = False):
         '''
@@ -174,14 +142,23 @@ class spectrum:
         tuple
             (Bias (V), Current (A))
         '''        
-        if save_all == False:
-            return self.signals['Bias calc (V)'], self.signals['Current (A)']
+        if 'Current [AVG] (A)' in self.signals.keys():
+            return self.signals['Bias calc (V)'], self.signals['Current [AVG] (A)']
         else:
-            import numpy as np
-            I = np.array([self.signals[channel] \
-                        for channel in np.sort(list(self.signals.keys())) \
-                        if ('Current' in channel) & ('Current [AVG]' not in channel)])
-            return self.signals['Bias calc (V)'], I
+            return self.signals['Bias calc (V)'], self.signals['Current (A)']
+            
+        
+    def dzdv_numerical(self):
+        '''
+        Returns
+        -------
+        tuple
+            (Bias (V), numerical dZdV (nm/V))
+        '''        
+        step = self.signals['Bias calc (V)'][1] - self.signals['Bias calc (V)'][0]            
+        dzdv = np.gradient(self.signals['Z (m)']*1e9, step, edge_order=2)
+        
+        return self.signals['Bias calc (V)'], dzdv
 
 class z_spectrum:
     
@@ -229,7 +206,6 @@ class z_spectrum:
         tuple
             (Z rel (m), Current (A))
         '''        
-        import numpy as np
         if self.sweep_dir == 'fwd':
             I = self.signals['Current (A)']
         elif self.sweep_dir == 'bwd':
@@ -248,8 +224,6 @@ class z_spectrum:
         float
             (apparent barrier height (eV), error (eV), z-spec slope (m**-1))
         '''
-        import numpy as np
-        from scipy.optimize import curve_fit
         def linear(x, barr, b):
             return -2*( np.sqrt(2*0.51099895e+6*barr)/(6.582119569e-16*2.99792458e+8) )*x + b
     
