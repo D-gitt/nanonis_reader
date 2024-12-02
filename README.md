@@ -36,13 +36,13 @@ Enter start number (or 'q' to quit):
 
 Enter the starting file number here.
 
-```bash
+```terminal
 Enter end number (or 'q' to quit): 
 ```
 
 Enter the ending file number here.
 
-```bash
+```terminal
 Generate PPT for files 1 to 1? (y/n): 
 ```
 
