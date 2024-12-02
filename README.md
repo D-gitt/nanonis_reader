@@ -1,6 +1,6 @@
 # MyPackage
 
-[![PyPI version](https://badge.fury.io/py/nanonis-reader.svg)]([https://badge.fury.io/py/mypackage](https://pypi.org/project/nanonis-reader/))
+[![PyPI version](https://badge.fury.io/py/nanonis-reader.svg)](https://pypi.org/project/nanonis-reader/)
 
 **nanonis-reader** is a Python library designed to help you analyze and visualize data with ease.  
 
