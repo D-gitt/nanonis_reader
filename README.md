@@ -20,7 +20,7 @@ pip install nanonis-reader
 
 When you input Nanonis file numbers, corresponding files will be automatically generated as a pptx file.
 
-```bash
+```python
 import nanonis-reader as nr
 path = 'your_folder_path'
 ppt_maker = nr.util.DataToPPT(base_path=path, keyword='your_file_keyword', output_filename='your_file_name.pptx')
