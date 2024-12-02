@@ -566,24 +566,14 @@ class DataToPPT:
             height = Inches(base_size)
 
             img_top = Inches(1.5)
-
-            if 'LI_Demod_1_X' in data.signals.keys():
-                img_stream1, img_stream2, img_stream3 = self.process_sxm_file(data)
-                # 세 이미지를 나란히 배치
-                slide.shapes.add_picture(img_stream1, Inches(0), img_top,
-                                    width=width)
-                slide.shapes.add_picture(img_stream2, Inches(0 + base_size * 1.02), img_top,
-                                    width=width)
-                slide.shapes.add_picture(img_stream3, Inches(0 + base_size * 2.04), img_top,
-                                    width=width)
-            else:
-                img_stream1, img_stream2 = self.process_sxm_file(data)
-                # 두 이미지를 나란히 배치
-                slide.shapes.add_picture(img_stream1, Inches(0), img_top,
-                                    width=width)
-                slide.shapes.add_picture(img_stream2, Inches(0 + base_size * 1.02), img_top,
-                                    width=width)
             
+            img_streams = self.process_sxm_file(data)
+            if not isinstance(img_streams, tuple):
+                img_streams = (img_streams,)
+            for i, img_stream in enumerate(img_streams):
+                x_position = Inches(0 + base_size * 1.02 * i)
+                slide.shapes.add_picture(img_stream, x_position, img_top, width=width)
+
             text_top = img_top + height + Inches(0.2)  # 0.2인치 간격
             info_text = self.get_sxm_info_text(params)
 
@@ -595,20 +585,13 @@ class DataToPPT:
             height = Inches(base_size)
             img_top = Inches(1.5)
 
-            if 'sweep_z' in params:
-                img_stream1, img_stream2 = self.process_dat_file(data)
-                slide.shapes.add_picture(img_stream1, Inches(0), img_top, width=width)
-                slide.shapes.add_picture(img_stream2, Inches(0 + base_size * 1.02), img_top, width=width)
-            elif 'Frequency (Hz)' in data.signals.keys():
-                img_stream1 = self.process_dat_file(data)
-                slide.shapes.add_picture(img_stream1, Inches(0), img_top, width=width)
-            else:
-                img_stream1, img_stream2, img_stream3 = self.process_dat_file(data)
-                slide.shapes.add_picture(img_stream1, Inches(0), img_top, width=width)
-                slide.shapes.add_picture(img_stream2, Inches(0 + base_size * 1.02), 
-                                         img_top, width=width)
-                slide.shapes.add_picture(img_stream3, Inches(0 + base_size * 2.04), 
-                                         img_top, width=width)
+            img_streams = self.process_dat_file(data)
+            if not isinstance(img_streams, tuple):
+                img_streams = (img_streams,)
+            for i, img_stream in enumerate(img_streams):
+                x_position = Inches(0 + base_size * 1.02 * i)
+                slide.shapes.add_picture(img_stream, x_position, img_top, width=width)
+                
 
             text_top = img_top + height + Inches(0.2)  # 0.2인치 간격
             info_text = self.get_dat_info_text(params)
