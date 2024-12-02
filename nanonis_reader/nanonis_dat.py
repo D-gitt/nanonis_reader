@@ -110,7 +110,7 @@ class spectrum:
             didv = np.gradient(self.signals['Current (A)'], step, edge_order=2) # I-V curve를 직접 미분.
             return self.signals['Bias calc (V)'], didv
     
-    def didv_normalized(self, factor=0.2, delete_zero_bias=False):
+    def didv_normalized(self, factor=0.2, delete_zero_bias=True):
         '''
         Returns
         -------
