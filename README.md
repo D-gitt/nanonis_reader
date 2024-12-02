@@ -29,7 +29,7 @@ ppt_maker.generate_ppt()
 
 Then, you will get below:
 
-```bash
+```terminal
 Maximum file number in directory: XXXX
 Enter start number (or 'q' to quit): 
 ```
