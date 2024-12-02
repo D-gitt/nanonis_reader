@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='nanonis_reader',
-    version='0.0.4',
+    version='0.0.5',
     description='A Python package for reading STM experimental data files obtained from Nanonis, based on nanonispy',
     author='Dowook Kim',
     author_email='dw.kim@postech.ac.kr',
@@ -11,7 +11,8 @@ setup(
         'numpy',
         'matplotlib',
         'nanonispy',
-        'scipy'
+        'scipy',
+        'python-pptx'
     ],
     packages=find_packages(exclude=[]),
     keywords=['nanonis', 'reader', 'nanonispy', 'STM data', 'scientific data analysis'],
