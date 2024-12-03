@@ -6,7 +6,7 @@ with open('README.md', 'r', encoding='utf-8') as f:
 
 setup(
     name='nanonis_reader',
-    version='0.0.8',
+    version='0.0.9',
     description='A Python package for reading STM experimental data files obtained from Nanonis, based on nanonispy',
     long_description=long_description,  # Set long_description
     long_description_content_type='text/markdown',  # Specify Markdown format
