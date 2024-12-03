@@ -180,22 +180,19 @@ class DataToPPT:
 
         elif data.header['Experiment'] == 'History Data':
             params = {
-                # 'bias': data.header['Bias>Bias (V)'],
-                # 'current': data.header['Z-Controller>Setpoint'],
-                # 'sweep_start': (
-                #     data.header.get('Bias Spectroscopy>Sweep Start (V)') or
-                #     ''
-                # ),
-                # 'sweep_end': (
-                #     data.header.get('Bias Spectroscopy>Sweep End (V)') or
-                #     ''
-                # ),
-                # # 'sweep_num': data.header['Bias Spectroscopy>Number of sweeps'],
-                # 'sweep_num': (
-                #     data.header.get('Bias Spectroscopy>Number of sweeps') or
-                #     ''
-                # ),
                 'history': data.header['Experiment'],
+                'comment': (
+                    data.header.get('Comment01') or
+                    data.header.get('comment') or
+                    data.header.get('Comment') or
+                    ''
+                ),
+                'saved_date': format_date(data.header['Saved Date']),
+            }
+
+        elif data.header['Experiment'] == 'LongTerm Data':
+            params = {
+                'long term chart': data.header['Experiment'],
                 'comment': (
                     data.header.get('Comment01') or
                     data.header.get('comment') or
@@ -310,6 +307,11 @@ class DataToPPT:
         elif 'history' in params:
             info_texts = []
             info_texts.append(f"{params['history']}")
+            info_texts.append(f"\nComment: {params['comment']}")
+            info_texts.append(f"\n({params['saved_date']})")
+        elif 'long term chart' in params:
+            info_texts = []
+            info_texts.append(f"{params['long term chart']}")
             info_texts.append(f"\nComment: {params['comment']}")
             info_texts.append(f"\n({params['saved_date']})")
         else:
@@ -516,7 +518,21 @@ class DataToPPT:
 
             return img_stream1, img_stream2
 
-       
+        elif data.header['Experiment'] == 'LongTerm Data':
+            LTchart = nr.nanonis_dat.longterm_data(data)
+
+            t_LTchart, z_LTchart = LTchart.get_z_longterm_chart()
+            fig = plt.figure(figsize=figsize)
+            plt.plot(t_LTchart, z_LTchart * 1e9, 'k-')
+            plt.xlabel('Rel. Time (s)')
+            plt.ylabel('Z (nm)')
+            img_stream1 = io.BytesIO()
+            plt.savefig(img_stream1, format='png', bbox_inches='tight', pad_inches=0.1)
+            img_stream1.seek(0)
+            # plt.close('all')
+
+            return img_stream1
+
         else:
             spec = nr.nanonis_dat.spectrum(data)
             bias_values = spec.iv_raw()[0]
