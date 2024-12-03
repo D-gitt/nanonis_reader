@@ -144,10 +144,15 @@ class DataToPPT:
             params = {
                 'bias': data.header['Bias>Bias (V)'],
                 'current': data.header['Z-Controller>Setpoint'],
-                'sweep_num': data.header['Bias Spectroscopy>Number of sweeps'],
+                # 'sweep_num': data.header['Bias Spectroscopy>Number of sweeps'],
+                # 'sweep_num': data.header['Z Spectroscopy>Number of sweeps'],
+                'sweep_num': (
+                                data.header.get('Z Spectroscopy>Number of sweeps') or
+                                data.header.get('Bias Spectroscopy>Number of sweeps') or
+                                ''
+                            ),
                 'offset': data.header['Z Spectroscopy>Initial Z-offset (m)'],
                 'sweep_z': data.header['Z Spectroscopy>Sweep distance (m)'],
-                'sweep_num': data.header['Z Spectroscopy>Number of sweeps'],
                 # 'comment': data.header['Comment01'],
                 'comment': (
                     data.header.get('Comment01') or
@@ -171,6 +176,33 @@ class DataToPPT:
                     data.header.get('Comment') or
                     ''
                 ),
+            }
+
+        elif data.header['Experiment'] == 'History Data':
+            params = {
+                # 'bias': data.header['Bias>Bias (V)'],
+                # 'current': data.header['Z-Controller>Setpoint'],
+                # 'sweep_start': (
+                #     data.header.get('Bias Spectroscopy>Sweep Start (V)') or
+                #     ''
+                # ),
+                # 'sweep_end': (
+                #     data.header.get('Bias Spectroscopy>Sweep End (V)') or
+                #     ''
+                # ),
+                # # 'sweep_num': data.header['Bias Spectroscopy>Number of sweeps'],
+                # 'sweep_num': (
+                #     data.header.get('Bias Spectroscopy>Number of sweeps') or
+                #     ''
+                # ),
+                'history': data.header['Experiment'],
+                'comment': (
+                    data.header.get('Comment01') or
+                    data.header.get('comment') or
+                    data.header.get('Comment') or
+                    ''
+                ),
+                'saved_date': format_date(data.header['Saved Date']),
             }
 
         else:
@@ -272,6 +304,11 @@ class DataToPPT:
         elif 'feedback' in params:
             info_texts = []
             info_texts.append(f"Comment: {params['comment']}")
+            info_texts.append(f"\n({params['saved_date']})")
+        elif 'history' in params:
+            info_texts = []
+            info_texts.append(f"{params['history']}")
+            info_texts.append(f"\nComment: {params['comment']}")
             info_texts.append(f"\n({params['saved_date']})")
         else:
             info_texts = []
@@ -448,6 +485,34 @@ class DataToPPT:
 
             return img_stream1
 
+        elif data.header['Experiment'] == 'History Data':
+            hist = nr.nanonis_dat.history_data(data)
+
+            # Current history
+            hist_I = hist.get_history('Current (A)')
+            fig = plt.figure(figsize=figsize)
+            plt.plot(hist_I[0] * 1e-3, hist_I[1] * 1e9, 'k-')
+            plt.xlabel('Time (s)')
+            plt.ylabel('Current (nA)')
+            img_stream1 = io.BytesIO()
+            plt.savefig(img_stream1, format='png', bbox_inches='tight', pad_inches=0.1)
+            img_stream1.seek(0)
+            # plt.close('all')
+
+            # Height history
+            hist_z = hist.get_history('Z (m)')
+            fig = plt.figure(figsize=figsize)
+            plt.plot(hist_z[0] * 1e-3, hist_z[1] * 1e9, 'k-')
+            plt.xlabel('Time (s)')
+            plt.ylabel('Z (nm)')
+            # plt.yscale('log')
+            # plt.grid(True)
+            img_stream2 = io.BytesIO()
+            plt.savefig(img_stream2, format='png', bbox_inches='tight', pad_inches=0.1)
+            img_stream2.seek(0)
+            # plt.close('all')
+
+            return img_stream1, img_stream2
 
        
         else:
