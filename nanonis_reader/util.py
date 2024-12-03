@@ -257,8 +257,10 @@ class DataToPPT:
                 return date_str  # 파싱 실패시 원본 반환
             
         params = {
-                'bias': data.header['Bias>Bias (V)'],
-                'current': data.header['Z-Controller>Setpoint'],
+                # 'bias': data.header['Bias>Bias (V)'],
+                # 'current': data.header['Z-Controller>Setpoint'],
+                'bias': (data.header.get('Bias>Bias (V)') or ''),
+                'current': (data.header.get('Z-Controller>Setpoint') or ''),
                 'pixel': data.header['dim_px'],
                 'range': data.header['size_xy'],
                 'comment': data.header['comment'],  
