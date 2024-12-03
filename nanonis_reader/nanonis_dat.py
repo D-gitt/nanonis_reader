@@ -209,17 +209,31 @@ class z_spectrum:
         tuple
             (Z rel (m), Current (A))
         '''        
+        I_fwd = next(
+                        (
+                            self.signals[key] for key in ['Current (A)', 'Current [AVG] (A)'] 
+                            if key in self.signals
+                        ),
+                        None
+                    )
+        I_bwd = next(
+                        (
+                            self.signals[key] for key in ['Current [bwd] (A)', 'Current [AVG] [bwd] (A)'] 
+                            if key in self.signals
+                        ),
+                        None
+                    )
         if self.sweep_dir == 'fwd':
-            I = self.signals['Current (A)']
+            I = I_fwd
         elif self.sweep_dir == 'bwd':
-            I = self.signals['Current [bwd] (A)']
+            I = I_bwd
         elif self.sweep_dir == 'AVG':
-            I = np.mean( [self.signals['Current (A)'], self.signals['Current [bwd] (A)']], axis = 0 )
+            I = np.mean( [I_fwd, I_bwd], axis = 0 )
         elif self.sweep_dir == 'save all':
             I = np.array([self.signals[channel] for channel in np.sort(list(self.signals.keys()))[:-3]])
                 
         return self.signals['Z rel (m)'], I
-    
+
     def get_apparent_barrier_height(self, fitting_current_range=(1e-12, 10e-12)): # fitting_current_range: current range in A unit.
         '''
         Returns
@@ -262,3 +276,27 @@ class noise_spectrum:
         elif 'Z PSD (m/sqrt(Hz))' in self.signals.keys():
             PSD = self.signals['Z PSD (m/sqrt(Hz))']
         return self.signals['Frequency (Hz)'], PSD
+
+class history_data:
+
+    def __init__(self, instance):
+        self.fname = instance.fname
+        self.header = instance.header
+        self.signals = instance.signals
+    
+    def get_history(self, channel='Z (m)'):
+        '''
+        Returns
+        -------
+        tuble
+            (Time (ms), History data)
+            History data:
+                'Current (A)', 'Z (m)', 'Input 2 (V)', ...
+                'Z (m)' is the default history data.
+        '''
+        sample_period = np.int64(self.header['Sample Period (ms)'])
+        
+        history = self.signals[channel]
+        time = np.arange(np.shape(history)[0]) * sample_period
+
+        return time, history
