@@ -268,7 +268,7 @@ class noise_spectrum:
         '''
         Returns
         -------
-        tuble
+        tuple
             (Frequency (Hz), Current PSD (A/sqrt(Hz)) or Z PSD (m/sqrt(Hz)))
         '''
         if 'Current PSD (A/sqrt(Hz))' in self.signals.keys():
@@ -288,7 +288,7 @@ class history_data:
         '''
         Returns
         -------
-        tuble
+        tuple
             (Time (ms), History data)
             History data:
                 'Current (A)', 'Z (m)', 'Input 2 (V)', ...
@@ -300,3 +300,22 @@ class history_data:
         time = np.arange(np.shape(history)[0]) * sample_period
 
         return time, history
+
+class longterm_data:
+
+    def __init__(self, instance):
+        self.fname = instance.fname
+        self.header = instance.header
+        self.signals = instance.signals
+    
+    def get_z_longterm_chart(self):
+        '''
+        Returns
+        -------
+        tuple
+            (Rel. Time (s), Z (m))
+        '''
+        t = self.signals['Rel. Time (s)']
+        z = self.signals['Z (m)']
+
+        return t, z
