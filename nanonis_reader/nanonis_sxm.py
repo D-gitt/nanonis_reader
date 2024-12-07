@@ -343,7 +343,7 @@ class fft:
         self.header = instance.header
         self.signals = instance.signals
         
-    def two_d_FFT_sqrt(image):
+    def two_d_FFT_sqrt(self, image):
         '''
         Parameters
         ----------
@@ -360,7 +360,7 @@ class fft:
         image_fft = np.sqrt(np.abs(fft_shift))
         return image_fft
     
-    def two_d_FFT_log(image):
+    def two_d_FFT_log(self, image):
         '''
         Parameters
         ----------
@@ -377,7 +377,7 @@ class fft:
         image_fft = np.log(np.abs(fft_shift))
         return image_fft
     
-    def two_d_FFT_lin(image):
+    def two_d_FFT_lin(self, image):
         '''
         Parameters
         ----------
