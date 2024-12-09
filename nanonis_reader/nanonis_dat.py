@@ -52,21 +52,58 @@ class spectrum:
             Returns the tuple: (Bias (V), Current (A))
     '''
     
-    def __init__(self, instance, sts_channel = 'LI Demod 1 X (A)', sweep_direction = 'fwd'):
+    def __init__(self, instance, sts_channel='LI Demod 1 X (A)', sweep_direction='fwd'):
+        # Input validation
+        if sts_channel not in ['LI Demod 1 X (A)', 'LI Demod 2 X (A)']:
+            raise ValueError("sts_channel must be 'LI Demod 1 X (A)' or 'LI Demod 2 X (A)'")
+        if sweep_direction not in ['fwd', 'bwd']:
+            raise ValueError("sweep_direction must be 'fwd' or 'bwd'")
+        
         self.fname = instance.fname
         self.header = instance.header
         self.signals = instance.signals
-        self.channel = sts_channel # 'LI Demod 1 X (A)' or 'LI Demod 2 X (A)'
-        self.sweep_dir = sweep_direction # 'fwd' or 'bwd'
+        self.channel = sts_channel
+        self.sweep_dir = sweep_direction
 
-    # def __init__(self, filepath, sts_channel = 'LI Demod 1 X (A)', sweep_direction = 'fwd'):
-    #     import nanonispy as nap
-    #     import os
-    #     self.fname = os.path.basename(filepath)
-    #     self.header = nap.read.Spec(filepath).header
-    #     self.signals = nap.read.Spec(filepath).signals
-    #     self.channel = sts_channel # 'LI Demod 1 X (A)' or 'LI Demod 2 X (A)'
-    #     self.sweep_dir = sweep_direction # 'fwd' or 'bwd'
+    def get_channel_name(self, base_channel, include_avg=False):
+        """
+        Returns a channel name with appropriate [AVG] and [bwd] tags added to the base channel name.
+        
+        Parameters:
+        -----------
+        base_channel : str
+            Base channel name (e.g., 'LI Demod 1 X (A)' or 'Current (A)')
+        include_avg : bool
+            Whether to include the [AVG] tag
+            
+        Returns:
+        --------
+        str
+            Complete channel name with appropriate tags
+        """
+        # Get base channel name up to (A)
+        channel_base = base_channel.replace(' (A)', '')
+        
+        # Add tags in order ([AVG], [bwd])
+        tags = []
+        if include_avg:
+            tags.append('[AVG]')
+        if self.sweep_dir == 'bwd':
+            tags.append('[bwd]')
+            
+        # Join tags with spaces
+        if tags:
+            channel_name = f"{channel_base} {' '.join(tags)} (A)"
+        else:
+            channel_name = f"{channel_base} (A)"
+            
+        return channel_name
+
+    def has_averaged_data(self):
+        """
+        Checks if the dataset contains averaged signals.
+        """
+        return 'Current [AVG] (A)' in self.signals.keys()
 
     def didv_raw(self):
         '''
@@ -75,11 +112,9 @@ class spectrum:
         tuple
             (Bias (V), raw dIdV (a.u.))
         '''
-        if 'Current [AVG] (A)' in self.signals.keys():
-            avg_channel = self.channel.replace(' (A)', ' [AVG] (A)')
-            return self.signals['Bias calc (V)'], self.signals[avg_channel]
-        else:
-            return self.signals['Bias calc (V)'], self.signals[self.channel]
+        has_avg = self.has_averaged_data()
+        channel_name = self.get_channel_name(self.channel, include_avg=has_avg)
+        return self.signals['Bias calc (V)'], self.signals[channel_name]
     
     def didv_scaled(self):
         '''
@@ -88,12 +123,10 @@ class spectrum:
         tuple
             (Bias (V), dIdV (S))
         '''
-        if 'Current [AVG] (A)' in self.signals.keys():
-            avg_channel = self.channel.replace(' (A)', ' [AVG] (A)')
-            return self.signals['Bias calc (V)'], np.median(self.didv_numerical()[1]/self.signals[avg_channel])*self.signals[avg_channel]
-        else:
-            return self.signals['Bias calc (V)'], np.median(self.didv_numerical()[1]/self.signals[self.channel])*self.signals[self.channel]
-
+        has_avg = self.has_averaged_data()
+        channel_name = self.get_channel_name(self.channel, include_avg=has_avg)
+        V, numerical_didv = self.didv_numerical()
+        return V, np.median(numerical_didv/self.signals[channel_name])*self.signals[channel_name]
     
     def didv_numerical(self):
         '''
@@ -103,12 +136,9 @@ class spectrum:
             (Bias (V), numerical dIdV (S))
         '''        
         step = self.signals['Bias calc (V)'][1] - self.signals['Bias calc (V)'][0]
-        if 'Current [AVG] (A)' in self.signals.keys():
-            didv = np.gradient(self.signals['Current [AVG] (A)'], step, edge_order=2) # I-V curve를 직접 미분.
-            return self.signals['Bias calc (V)'], didv
-        else:
-            didv = np.gradient(self.signals['Current (A)'], step, edge_order=2) # I-V curve를 직접 미분.
-            return self.signals['Bias calc (V)'], didv
+        current_channel = self.get_channel_name('Current', include_avg=self.has_averaged_data())
+        didv = np.gradient(self.signals[current_channel], step, edge_order=2)
+        return self.signals['Bias calc (V)'], didv
     
     def didv_normalized(self, factor=0.2, delete_zero_bias=True):
         '''
@@ -117,40 +147,32 @@ class spectrum:
         tuple
             (Bias (V), normalized dIdV)
         '''               
-        # dIdV, V = self.signals[a.channel], self.signals['Bias calc (V)']
         V, dIdV = self.didv_scaled()
-        I_cal = cumtrapz(dIdV, V, initial = 0)
-        zero = np.argwhere ( abs(V) == np.min(abs(V)) )[0, 0] # The index where V = 0 or nearest to 0.
-        popt, pcov = curve_fit (lambda x, a, b: a*x + b, V[zero-1:zero+2], I_cal[zero-1:zero+2])
+        I_cal = cumtrapz(dIdV, V, initial=0)
+        zero = np.argwhere(abs(V) == np.min(abs(V)))[0, 0]
+        popt, pcov = curve_fit(lambda x, a, b: a*x + b, V[zero-1:zero+2], I_cal[zero-1:zero+2])
         I_cal -= popt[1]
 
-        # get total conductance I/V
-        with np.errstate(divide='ignore'): # Ignore the warning of 'division by zero'.
+        with np.errstate(divide='ignore'):
             IV_cal = I_cal/V
-
-        # Normalized_dIdV = dIdV / IV_cal
-        # return np.delete(V, zero), np.delete(Normalized_dIdV, zero)
 
         delta = factor*np.median(IV_cal)
         Normalized_dIdV = dIdV / np.sqrt(np.square(delta) + np.square(IV_cal))
-        if delete_zero_bias == False:
-            return V, Normalized_dIdV
-        else:
+        
+        if delete_zero_bias:
             return np.delete(V, zero), np.delete(Normalized_dIdV, zero)
+        return V, Normalized_dIdV
     
-    def iv_raw(self, save_all = False):
+    def iv_raw(self):
         '''
         Returns
         -------
         tuple
             (Bias (V), Current (A))
         '''        
-        if 'Current [AVG] (A)' in self.signals.keys():
-            return self.signals['Bias calc (V)'], self.signals['Current [AVG] (A)']
-        else:
-            return self.signals['Bias calc (V)'], self.signals['Current (A)']
-            
-        
+        current_channel = self.get_channel_name('Current', include_avg=self.has_averaged_data())
+        return self.signals['Bias calc (V)'], self.signals[current_channel]
+    
     def dzdv_numerical(self):
         '''
         Returns
@@ -160,8 +182,159 @@ class spectrum:
         '''        
         step = self.signals['Bias calc (V)'][1] - self.signals['Bias calc (V)'][0]            
         dzdv = np.gradient(self.signals['Z (m)']*1e9, step, edge_order=2)
-        
         return self.signals['Bias calc (V)'], dzdv
+
+# spectrum class in ver. 0.0.9
+# class spectrum:
+    
+#     '''
+#     Args:
+#         filepath : str
+#             Name of the Nanonis spectrum file to be loaded.
+#         sts_channel : str
+#             Channel name corresponding to the dI/dV value.
+#             'LI Demod 1 X (A)' by default.
+#         sweep_direction : str
+#             The sweep direction in which the dI/dV value is measured.
+#             'fwd' by default.
+    
+#     Attributes (name : type):
+#         file : nanonispy.read.NanonisFile class
+#             Base class for Nanonis data files (grid, scan, point spectroscopy).
+#             Handles methods and parsing tasks common to all Nanonis files.
+#             https://github.com/underchemist/nanonispy/blob/master/nanonispy/read.py
+#         header : dict
+#             Header information of spectrum data.
+#         signals : dict
+#             Measured values in spectrum data.
+#         channel : str
+#             Channel name corresponding to the dI/dV value.
+#             'LI Demod 1 X (A)' by default.
+#         sweep_dir : str
+#             The sweep direction in which the dI/dV value is measured.
+#             'fwd' by default.
+
+#     Methods:
+#         didv_scaled(self)
+#             Returns the tuple: (Bias (V), dIdV (S))
+#         didv_numerical(self)
+#             Returns the tuple: (Bias (V), numerical dIdV (S))
+#         didv_normalized(self)
+#             Returns the tuple: (Bias (V), normalized dIdV)
+#         iv_raw(self)
+#             Returns the tuple: (Bias (V), Current (A))
+#     '''
+    
+#     def __init__(self, instance, sts_channel = 'LI Demod 1 X (A)', sweep_direction = 'fwd'):
+#         self.fname = instance.fname
+#         self.header = instance.header
+#         self.signals = instance.signals
+#         self.channel = sts_channel # 'LI Demod 1 X (A)' or 'LI Demod 2 X (A)'
+#         self.sweep_dir = sweep_direction # 'fwd' or 'bwd'
+
+#     # def __init__(self, filepath, sts_channel = 'LI Demod 1 X (A)', sweep_direction = 'fwd'):
+#     #     import nanonispy as nap
+#     #     import os
+#     #     self.fname = os.path.basename(filepath)
+#     #     self.header = nap.read.Spec(filepath).header
+#     #     self.signals = nap.read.Spec(filepath).signals
+#     #     self.channel = sts_channel # 'LI Demod 1 X (A)' or 'LI Demod 2 X (A)'
+#     #     self.sweep_dir = sweep_direction # 'fwd' or 'bwd'
+
+#     def didv_raw(self):
+#         '''
+#         Returns
+#         -------
+#         tuple
+#             (Bias (V), raw dIdV (a.u.))
+#         '''
+#         if 'Current [AVG] (A)' in self.signals.keys():
+#             avg_channel = self.channel.replace(' (A)', ' [AVG] (A)')
+#             return self.signals['Bias calc (V)'], self.signals[avg_channel]
+#         else:
+#             return self.signals['Bias calc (V)'], self.signals[self.channel]
+    
+#     def didv_scaled(self):
+#         '''
+#         Returns
+#         -------
+#         tuple
+#             (Bias (V), dIdV (S))
+#         '''
+#         if 'Current [AVG] (A)' in self.signals.keys():
+#             avg_channel = self.channel.replace(' (A)', ' [AVG] (A)')
+#             return self.signals['Bias calc (V)'], np.median(self.didv_numerical()[1]/self.signals[avg_channel])*self.signals[avg_channel]
+#         else:
+#             return self.signals['Bias calc (V)'], np.median(self.didv_numerical()[1]/self.signals[self.channel])*self.signals[self.channel]
+
+    
+#     def didv_numerical(self):
+#         '''
+#         Returns
+#         -------
+#         tuple
+#             (Bias (V), numerical dIdV (S))
+#         '''        
+#         step = self.signals['Bias calc (V)'][1] - self.signals['Bias calc (V)'][0]
+#         if 'Current [AVG] (A)' in self.signals.keys():
+#             didv = np.gradient(self.signals['Current [AVG] (A)'], step, edge_order=2) # I-V curve를 직접 미분.
+#             return self.signals['Bias calc (V)'], didv
+#         else:
+#             didv = np.gradient(self.signals['Current (A)'], step, edge_order=2) # I-V curve를 직접 미분.
+#             return self.signals['Bias calc (V)'], didv
+    
+#     def didv_normalized(self, factor=0.2, delete_zero_bias=True):
+#         '''
+#         Returns
+#         -------
+#         tuple
+#             (Bias (V), normalized dIdV)
+#         '''               
+#         # dIdV, V = self.signals[a.channel], self.signals['Bias calc (V)']
+#         V, dIdV = self.didv_scaled()
+#         I_cal = cumtrapz(dIdV, V, initial = 0)
+#         zero = np.argwhere ( abs(V) == np.min(abs(V)) )[0, 0] # The index where V = 0 or nearest to 0.
+#         popt, pcov = curve_fit (lambda x, a, b: a*x + b, V[zero-1:zero+2], I_cal[zero-1:zero+2])
+#         I_cal -= popt[1]
+
+#         # get total conductance I/V
+#         with np.errstate(divide='ignore'): # Ignore the warning of 'division by zero'.
+#             IV_cal = I_cal/V
+
+#         # Normalized_dIdV = dIdV / IV_cal
+#         # return np.delete(V, zero), np.delete(Normalized_dIdV, zero)
+
+#         delta = factor*np.median(IV_cal)
+#         Normalized_dIdV = dIdV / np.sqrt(np.square(delta) + np.square(IV_cal))
+#         if delete_zero_bias == False:
+#             return V, Normalized_dIdV
+#         else:
+#             return np.delete(V, zero), np.delete(Normalized_dIdV, zero)
+    
+#     def iv_raw(self, save_all = False):
+#         '''
+#         Returns
+#         -------
+#         tuple
+#             (Bias (V), Current (A))
+#         '''        
+#         if 'Current [AVG] (A)' in self.signals.keys():
+#             return self.signals['Bias calc (V)'], self.signals['Current [AVG] (A)']
+#         else:
+#             return self.signals['Bias calc (V)'], self.signals['Current (A)']
+            
+        
+#     def dzdv_numerical(self):
+#         '''
+#         Returns
+#         -------
+#         tuple
+#             (Bias (V), numerical dZdV (nm/V))
+#         '''        
+#         step = self.signals['Bias calc (V)'][1] - self.signals['Bias calc (V)'][0]            
+#         dzdv = np.gradient(self.signals['Z (m)']*1e9, step, edge_order=2)
+        
+#         return self.signals['Bias calc (V)'], dzdv
 
 class z_spectrum:
     
