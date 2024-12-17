@@ -115,7 +115,8 @@ class DataToPPT:
             'scan_date': format_date(data.header['rec_date']),
         }
         params['aspect_ratio'] = (params['pixels'][0]/params['pixels'][1])*(params['range'][1]/params['range'][0])
-        
+        params['fname'] = data.fname
+
         return params
         
     def get_dat_parameters(self, data):
@@ -227,7 +228,8 @@ class DataToPPT:
                 ),
                 'saved_date': format_date(data.header['Saved Date']),
             }
-        
+        params['fname'] = data.fname
+
         return params
         
         
@@ -262,7 +264,8 @@ class DataToPPT:
                 'range': data.header['size_xy'],
                 'comment': data.header['comment'],  
         }
-        
+        params['fname'] = data.fname
+
         return params
     
     def get_sxm_info_text(self, params):
@@ -270,6 +273,7 @@ class DataToPPT:
         .sxm 파일의 정보 텍스트 생성
         '''
         info_texts = []
+        info_texts.append(f"{params['fname']}\n")
         info_texts.append(f"{float(params['bias'])} V /")
         current = float(params['current'])
         if abs(current) >= 1e-9:
@@ -290,6 +294,7 @@ class DataToPPT:
         '''
         if 'sweep_z' in params:
             info_texts = []
+            info_texts.append(f"{params['fname']}\n")
             info_texts.append(f"{float(params['bias'])} V /")
             current = float(params['current'])
             if abs(current) >= 1e-9:
@@ -302,20 +307,24 @@ class DataToPPT:
             info_texts.append(f"\n({params['saved_date']})")
         elif 'feedback' in params:
             info_texts = []
+            info_texts.append(f"{params['fname']}\n")
             info_texts.append(f"Comment: {params['comment']}")
             info_texts.append(f"\n({params['saved_date']})")
         elif 'history' in params:
             info_texts = []
+            info_texts.append(f"{params['fname']}\n")
             info_texts.append(f"{params['history']}")
             info_texts.append(f"\nComment: {params['comment']}")
             info_texts.append(f"\n({params['saved_date']})")
         elif 'long term chart' in params:
             info_texts = []
+            info_texts.append(f"{params['fname']}\n")
             info_texts.append(f"{params['long term chart']}")
             info_texts.append(f"\nComment: {params['comment']}")
             info_texts.append(f"\n({params['saved_date']})")
         else:
             info_texts = []
+            info_texts.append(f"{params['fname']}\n")
             info_texts.append(f"{float(params['bias'])} V /")
             current = float(params['current'])
             if abs(current) >= 1e-9:
