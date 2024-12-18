@@ -276,13 +276,50 @@ class didvmap:
         self.header = instance.header
         self.signals = instance.signals
     
-    def get_map(self, scan_direction = 'fwd', channel = 'LI_Demod_1_X'):
+    # def get_map(self, scan_direction = 'fwd', channel = 'LI_Demod_1_X'):
+    #     if scan_direction == 'fwd':
+    #         didv = self.signals[channel]['forward']
+    #     elif scan_direction == 'bwd':
+    #         import numpy as np
+    #         didv = np.flip(self.signals[channel]['backward'], axis = 1)
+    #     return didv
+
+    def get_map(self, processing = 'raw', scan_direction = 'fwd', channel = 'LI_Demod_1_X'):
+        if processing == 'raw':
+            return self.raw(scan_direction, channel)
+        elif processing == 'subtract linear fit':
+            return self.subtract_linear_fit(scan_direction, channel)
+        
+    def raw(self, scan_direction, channel):
         if scan_direction == 'fwd':
             didv = self.signals[channel]['forward']
         elif scan_direction == 'bwd':
-            import numpy as np
             didv = np.flip(self.signals[channel]['backward'], axis = 1)
         return didv
+    
+    def subtract_linear_fit(self, scan_direction, channel):        
+        z = self.raw(scan_direction, channel)
+        lines, pixels = np.shape(z)
+        x = np.arange(pixels)
+        
+        # nan이 있는 행 찾기
+        nan_rows = np.isnan(z).any(axis=1)
+        
+        # 결과 배열 초기화 (nan으로)
+        z_sublf = np.full_like(z, np.nan)
+        
+        # nan이 없는 행들에 대해 처리
+        valid_rows = ~nan_rows
+        valid_z = z[valid_rows]
+        
+        # 한번에 모든 유효한 행에 대해 선형 피팅
+        coeffs = np.polyfit(x, valid_z.T, 1)
+        fitted = (coeffs[0].reshape(-1,1) * x + coeffs[1].reshape(-1,1))
+        
+        # 결과 저장
+        z_sublf[valid_rows] = valid_z - fitted
+        
+        return z_sublf
 
 class currentmap:
     
