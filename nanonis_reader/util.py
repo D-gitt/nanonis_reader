@@ -255,17 +255,85 @@ class DataToPPT:
             except:
                 return date_str  # 파싱 실패시 원본 반환
             
-        params = {
-                # 'bias': data.header['Bias>Bias (V)'],
-                # 'current': data.header['Z-Controller>Setpoint'],
-                'bias': (data.header.get('Bias>Bias (V)') or ''),
-                'current': (data.header.get('Z-Controller>Setpoint') or ''),
-                'pixel': data.header['dim_px'],
-                'range': data.header['size_xy'],
-                'comment': data.header['comment'],  
-        }
-        params['fname'] = data.fname
+        # params = {
+        #         # 'bias': data.header['Bias>Bias (V)'],
+        #         # 'current': data.header['Z-Controller>Setpoint'],
+        #         'bias': (data.header.get('Bias>Bias (V)') or ''),
+        #         'current': (data.header.get('Z-Controller>Setpoint') or ''),
+        #         'pixel': data.header['dim_px'],
+        #         'range': data.header['size_xy'],
+        #         'comment': data.header['comment'],  
+        # }
+        # params['fname'] = data.fname
+        # params = {
+        #     # 'pixels': data.header['scan_pixels'],
+        #     # 'range': data.header['scan_range'],
+        #     # 'direction': data.header['scan_dir'],
+        #     # 'angle': data.header['scan_angle'],
+        #     # 'bias': data.header['bias>bias (v)'],
+        #     # 'current': data.header['z-controller>setpoint'],
+        #     'scan_time': data.header['rec_time'],
+        #     'scan_date': format_date(data.header['rec_date']),
+        # }
+        # params['aspect_ratio'] = (params['pixels'][0]/params['pixels'][1])*(params['range'][1]/params['range'][0])
+        # params['fname'] = data.fname
 
+        if all(key not in data.signals.keys() for key in ['LI Demod 1 X (A)', 'LI Demod 2 X (A)']):
+            params = {
+                'pixels': data.header['dim_px'],
+                'range': data.header['size_xy'],
+                'angle': data.header['angle'],
+                'bias': data.header['Bias>Bias (V)'],
+                'current': data.header['Z-Controller>Setpoint'],
+                # 'sweep_num': data.header['Bias Spectroscopy>Number of sweeps'],
+                # 'sweep_num': data.header['Z Spectroscopy>Number of sweeps'],
+                'sweep_num': (
+                                data.header.get('Z Spectroscopy>Number of sweeps') or
+                                data.header.get('Bias Spectroscopy>Number of sweeps') or
+                                ''
+                            ),
+                'offset': data.header['Z Spectroscopy>Initial Z-offset (m)'],
+                'sweep_z': data.header['Z Spectroscopy>Sweep distance (m)'],
+                # 'comment': data.header['Comment01'],
+                'comment': (
+                    data.header.get('Comment01') or
+                    data.header.get('comment') or
+                    data.header.get('Comment') or
+                    ''
+                ),
+                # 'saved_date': format_date(data.header['Saved Date']),
+                'saved_date': format_date(data.header['start_time']),
+            }
+            # return params
+
+        else:
+            params = {
+                'bias': data.header['Bias>Bias (V)'],
+                'current': data.header['Z-Controller>Setpoint'],
+                'sweep_start': (
+                    data.header.get('Bias Spectroscopy>Sweep Start (V)') or
+                    ''
+                ),
+                'sweep_end': (
+                    data.header.get('Bias Spectroscopy>Sweep End (V)') or
+                    ''
+                ),
+                # 'sweep_num': data.header['Bias Spectroscopy>Number of sweeps'],
+                'sweep_num': (
+                    data.header.get('Bias Spectroscopy>Number of sweeps') or
+                    ''
+                ),
+                'comment': (
+                    data.header.get('Comment01') or
+                    data.header.get('comment') or
+                    data.header.get('Comment') or
+                    ''
+                ),
+                'saved_date': format_date(data.header['Saved Date']),
+            }
+        params['aspect_ratio'] = (params['pixels'][0]/params['pixels'][1])*(params['range'][1]/params['range'][0])
+        params['fname'] = data.fname
+        
         return params
     
     def get_sxm_info_text(self, params):
@@ -380,7 +448,7 @@ class DataToPPT:
         plt.draw()
         posn = ax.get_position()
         cax = fig.add_axes([posn.x1 + 0.01, posn.y0, 
-                       0.02, posn.height])
+                            0.02, posn.height])
         plt.colorbar(im, cax=cax)
 
         # figure를 이미지로 저장
@@ -629,8 +697,98 @@ class DataToPPT:
         .3ds 파일 처리 함수
         '''
         # 3D 데이터 처리
-        plt.figure(figsize=(10, 8))
+        # plt.figure(figsize=(10, 8))
+        params = self.get_3ds_parameters(data)
+        base_size = 5
+        figsize = (base_size, base_size)
+        
         # 여기에 3D 데이터 처리 코드 추가
+        
+        # For I-z spectra,
+        if 'sweep_z' in params:
+            # 첫 번째 이미지 (topography)
+            fig = plt.figure(figsize=figsize)
+            ax = fig.add_subplot(111)      
+            
+            # topo = nr.nanonis_sxm.topography(data)
+            # z_data = topo.get_z('subtract linear fit', 'fwd')
+            topo = nr.nanonis_3ds.Topo(data)
+            z_data = topo.get_z ('subtract linear fit')
+
+            # origin = 'upper' if params['direction'] == 'down' else 'lower'
+            origin = 'lower'
+            vmin, vmax = self.get_3sigma_limits(z_data)
+            nanox = nr.cmap_custom.nanox()
+            bwr = nr.cmap_custom.bwr()
+            
+            # 이미지 플롯
+            im = ax.imshow(z_data, origin=origin, vmin=vmin, vmax=vmax, 
+                        aspect=params['aspect_ratio'], cmap=nanox, interpolation='none')
+
+            # colorbar 추가
+            plt.draw()
+            posn = ax.get_position()
+            cax = fig.add_axes([posn.x1 + 0.01, posn.y0, 
+                        0.02, posn.height])
+            plt.colorbar(im, cax=cax)
+
+            # figure를 이미지로 저장
+            img_stream1 = io.BytesIO()
+            plt.savefig(img_stream1, format='png', bbox_inches='tight', pad_inches=0.01)
+            img_stream1.seek(0)
+            # plt.close('all')
+
+            # 두 번째 이미지 (current map)
+            fig = plt.figure(figsize=figsize)
+            ax = fig.add_subplot(111)
+            
+            spec = nr.nanonis_3ds.Map(data)
+            spec_z = spec.get_currentmap (sweep_idx=100, sweep_direction = 'AVG')
+            
+            # z_data_diff = topo.get_z('differentiate', 'fwd')
+            vmin, vmax = self.get_3sigma_limits(spec_z)
+            im = ax.imshow(spec_z, origin=origin, vmin=vmin, vmax=vmax, 
+                        aspect=params['aspect_ratio'], cmap=nanox, interpolation='none')
+
+            plt.draw()
+            posn = ax.get_position()
+            cax = fig.add_axes([posn.x1 + 0.01, posn.y0, 0.02, posn.height])
+            cbar = plt.colorbar(im, cax=cax)
+            cbar.formatter.set_powerlimits((-3, 4))  # scientific notation 사용 범위 설정
+            cbar.update_ticks()
+
+            img_stream2 = io.BytesIO()
+            plt.savefig(img_stream2, format='png', bbox_inches='tight', pad_inches=0.01)
+            img_stream2.seek(0)
+            # plt.close('all')
+
+            # 세 번째 이미지 (barrier map)
+            fig = plt.figure(figsize=figsize)
+            ax = fig.add_subplot(111)
+            
+            spec = nr.nanonis_3ds.Map(data)
+            barrier_height = spec.get_apparent_barrier_height_map ('AVG')[0]
+            # barrier_height = spec.get_apparent_barrier_height_map ('fwd')[0]
+            
+            # z_data_diff = topo.get_z('differentiate', 'fwd')
+            vmin, vmax = self.get_3sigma_limits(barrier_height)
+            im = ax.imshow(barrier_height, origin=origin, vmin=vmin, vmax=vmax, 
+                        aspect=params['aspect_ratio'], cmap=bwr, interpolation='none')
+
+            plt.draw()
+            posn = ax.get_position()
+            cax = fig.add_axes([posn.x1 + 0.01, posn.y0, 0.02, posn.height])
+            cbar = plt.colorbar(im, cax=cax)
+            cbar.formatter.set_powerlimits((-3, 4))  # scientific notation 사용 범위 설정
+            cbar.update_ticks()
+
+            img_stream3 = io.BytesIO()
+            plt.savefig(img_stream3, format='png', bbox_inches='tight', pad_inches=0.01)
+            img_stream3.seek(0)
+            # plt.close('all')
+
+
+            return img_stream1, img_stream2, img_stream3
         
         img_stream = io.BytesIO()
         plt.savefig(img_stream, format='png', bbox_inches='tight')
@@ -638,6 +796,7 @@ class DataToPPT:
         # plt.close('all')
         return img_stream
     
+
     def add_slide(self, data):
         '''
         데이터를 처리하고 슬라이드에 추가하는 함수
@@ -656,7 +815,6 @@ class DataToPPT:
             base_size = 3.2  # 이미지 크기를 조금 줄여서 3개가 들어갈 수 있게 조정
             width = Inches(base_size)
             height = Inches(base_size)
-
             img_top = Inches(1.5)
             
             img_streams = self.process_sxm_file(data)
@@ -689,10 +847,25 @@ class DataToPPT:
             info_text = self.get_dat_info_text(params)
             
         elif data.fname.endswith('.3ds'):
-            params = self.get_scan_parameters(data)
+            params = self.get_3ds_parameters(data)
+            # info_text = self.get_3ds_info_text(params)
+            # text_top = Inches(6)
+            # img_stream = self.process_3ds_file(data)
+            base_size = 3.2
+            width = Inches(base_size)
+            height = Inches(base_size)
+            img_top = Inches(1.5)
+
+            img_streams = self.process_3ds_file(data)
+            if not isinstance(img_streams, tuple):
+                img_streams = (img_streams,)
+            for i, img_stream in enumerate(img_streams):
+                x_position = Inches(0 + base_size * 1.02 * i)
+                slide.shapes.add_picture(img_stream, x_position, img_top, width=width)
+                
+
+            text_top = img_top + height + Inches(0.2)  # 0.2인치 간격
             info_text = self.get_3ds_info_text(params)
-            text_top = Inches(6)
-            img_stream = self.process_3ds_file(data)
         
         # 추가 정보 텍스트 박스
         # left, top, width, height
