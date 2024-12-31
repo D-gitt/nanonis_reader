@@ -7,6 +7,7 @@ import glob
 import nanonis_reader as nr
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import io
+from nanonis_reader.find_value import nearest
 
 class NanonisData:
     def __init__(self, base_path, file_number=None, keyword=None):
@@ -285,29 +286,26 @@ class DataToPPT:
                 'angle': data.header['angle'],
                 'bias': data.header['Bias>Bias (V)'],
                 'current': data.header['Z-Controller>Setpoint'],
-                # 'sweep_num': data.header['Bias Spectroscopy>Number of sweeps'],
-                # 'sweep_num': data.header['Z Spectroscopy>Number of sweeps'],
                 'sweep_num': (
                                 data.header.get('Z Spectroscopy>Number of sweeps') or
-                                data.header.get('Bias Spectroscopy>Number of sweeps') or
                                 ''
                             ),
                 'offset': data.header['Z Spectroscopy>Initial Z-offset (m)'],
                 'sweep_z': data.header['Z Spectroscopy>Sweep distance (m)'],
-                # 'comment': data.header['Comment01'],
                 'comment': (
                     data.header.get('Comment01') or
                     data.header.get('comment') or
                     data.header.get('Comment') or
                     ''
                 ),
-                # 'saved_date': format_date(data.header['Saved Date']),
                 'saved_date': format_date(data.header['start_time']),
             }
-            # return params
 
         else:
             params = {
+                'pixels': data.header['dim_px'],
+                'range': data.header['size_xy'],
+                'angle': data.header['angle'],
                 'bias': data.header['Bias>Bias (V)'],
                 'current': data.header['Z-Controller>Setpoint'],
                 'sweep_start': (
@@ -318,7 +316,6 @@ class DataToPPT:
                     data.header.get('Bias Spectroscopy>Sweep End (V)') or
                     ''
                 ),
-                # 'sweep_num': data.header['Bias Spectroscopy>Number of sweeps'],
                 'sweep_num': (
                     data.header.get('Bias Spectroscopy>Number of sweeps') or
                     ''
@@ -329,7 +326,7 @@ class DataToPPT:
                     data.header.get('Comment') or
                     ''
                 ),
-                'saved_date': format_date(data.header['Saved Date']),
+                'saved_date': format_date(data.header['start_time']),
             }
         params['aspect_ratio'] = (params['pixels'][0]/params['pixels'][1])*(params['range'][1]/params['range'][0])
         params['fname'] = data.fname
@@ -412,7 +409,48 @@ class DataToPPT:
         .3ds 파일의 정보 텍스트 생성
         '''
         # .3ds 파일에 맞는 정보 포맷
-        return "3DS file parameters"
+        # For I-z grid,
+        if 'sweep_z' in params:
+            info_texts = []
+            info_texts.append(f"{params['fname']}\n") # Data name
+            info_texts.append(f"I-z spectroscopy grid\n") # "I-z spectrum"
+            info_texts.append(f"{float(params['bias'])} V /") # set bias
+            current = float(params['current'])
+            if abs(current) >= 1e-9: # set current
+                # nA 단위로 표시
+                info_texts.append(f"{current*1e9:.0f} nA")
+            else:
+                # pA 단위로 표시
+                info_texts.append(f"{current*1e12:.0f} pA")
+            # size (angle)
+            # sweep $\Delta z$, number of sweep
+            info_texts.append(f"\n{float(params['offset'])*1e12:.0f} pm to {(float(params['offset'])+float(params['sweep_z']))*1e12:.0f} pm (sweeps: {params['sweep_num']})")
+            info_texts.append(f"\n{params['range'][0]*1e9:.0f} x {params['range'][1]*1e9:.0f} nm²")
+            info_texts.append(f"({float(params['angle']):.1f}˚)")
+            info_texts.append(f"\nComment: {params['comment']}")    
+            info_texts.append(f"\n({params['saved_date']})")
+
+        # For STS grid,
+        else:
+            info_texts = []
+            info_texts.append(f"{params['fname']}\n")
+            info_texts.append(f"STS grid\n") # "STS"
+            info_texts.append(f"{float(params['bias'])} V /")
+            current = float(params['current'])
+            if abs(current) >= 1e-9:
+                # nA 단위로 표시
+                info_texts.append(f"{current*1e9:.0f} nA")
+            else:
+                # pA 단위로 표시
+                info_texts.append(f"{current*1e12:.0f} pA")
+            info_texts.append(f"\n{float(params['sweep_start'])} V to {float(params['sweep_end'])} V (sweeps: {params['sweep_num']})")
+            info_texts.append(f"\n{params['range'][0]*1e9:.0f} x {params['range'][1]*1e9:.0f} nm²")
+            info_texts.append(f"({float(params['angle']):.1f}˚)")
+            info_texts.append(f"\nComment: {params['comment']}")
+            info_texts.append(f"\n({params['saved_date']})")
+
+        # return "3DS file parameters"
+        return " ".join(info_texts)
 
     def get_3sigma_limits(self, data):
         mean = np.nanmean(data)
@@ -696,26 +734,17 @@ class DataToPPT:
         '''
         .3ds 파일 처리 함수
         '''
-        # 3D 데이터 처리
-        # plt.figure(figsize=(10, 8))
         params = self.get_3ds_parameters(data)
         base_size = 5
         figsize = (base_size, base_size)
-        
-        # 여기에 3D 데이터 처리 코드 추가
         
         # For I-z spectra,
         if 'sweep_z' in params:
             # 첫 번째 이미지 (topography)
             fig = plt.figure(figsize=figsize)
             ax = fig.add_subplot(111)      
-            
-            # topo = nr.nanonis_sxm.topography(data)
-            # z_data = topo.get_z('subtract linear fit', 'fwd')
             topo = nr.nanonis_3ds.Topo(data)
             z_data = topo.get_z ('subtract linear fit')
-
-            # origin = 'upper' if params['direction'] == 'down' else 'lower'
             origin = 'lower'
             vmin, vmax = self.get_3sigma_limits(z_data)
             nanox = nr.cmap_custom.nanox()
@@ -729,7 +758,7 @@ class DataToPPT:
             plt.draw()
             posn = ax.get_position()
             cax = fig.add_axes([posn.x1 + 0.01, posn.y0, 
-                        0.02, posn.height])
+                                0.02, posn.height])
             plt.colorbar(im, cax=cax)
 
             # figure를 이미지로 저장
@@ -741,15 +770,16 @@ class DataToPPT:
             # 두 번째 이미지 (current map)
             fig = plt.figure(figsize=figsize)
             ax = fig.add_subplot(111)
-            
             spec = nr.nanonis_3ds.Map(data)
-            spec_z = spec.get_currentmap (sweep_idx=100, sweep_direction = 'AVG')
-            
-            # z_data_diff = topo.get_z('differentiate', 'fwd')
+
+            idx = (nearest (spec.signals['sweep_signal'], -100e-12)[0])
+
+            spec_z = spec.get_currentmap (sweep_idx=idx, sweep_direction = 'AVG')
             vmin, vmax = self.get_3sigma_limits(spec_z)
             im = ax.imshow(spec_z, origin=origin, vmin=vmin, vmax=vmax, 
                         aspect=params['aspect_ratio'], cmap=nanox, interpolation='none')
 
+            # colorbar 추가
             plt.draw()
             posn = ax.get_position()
             cax = fig.add_axes([posn.x1 + 0.01, posn.y0, 0.02, posn.height])
@@ -757,6 +787,7 @@ class DataToPPT:
             cbar.formatter.set_powerlimits((-3, 4))  # scientific notation 사용 범위 설정
             cbar.update_ticks()
 
+            # figure를 이미지로 저장
             img_stream2 = io.BytesIO()
             plt.savefig(img_stream2, format='png', bbox_inches='tight', pad_inches=0.01)
             img_stream2.seek(0)
@@ -765,16 +796,13 @@ class DataToPPT:
             # 세 번째 이미지 (barrier map)
             fig = plt.figure(figsize=figsize)
             ax = fig.add_subplot(111)
-            
             spec = nr.nanonis_3ds.Map(data)
             barrier_height = spec.get_apparent_barrier_height_map ('AVG')[0]
-            # barrier_height = spec.get_apparent_barrier_height_map ('fwd')[0]
-            
-            # z_data_diff = topo.get_z('differentiate', 'fwd')
             vmin, vmax = self.get_3sigma_limits(barrier_height)
             im = ax.imshow(barrier_height, origin=origin, vmin=vmin, vmax=vmax, 
                         aspect=params['aspect_ratio'], cmap=bwr, interpolation='none')
 
+            # colorbar 추가
             plt.draw()
             posn = ax.get_position()
             cax = fig.add_axes([posn.x1 + 0.01, posn.y0, 0.02, posn.height])
@@ -782,11 +810,120 @@ class DataToPPT:
             cbar.formatter.set_powerlimits((-3, 4))  # scientific notation 사용 범위 설정
             cbar.update_ticks()
 
+            # figure를 이미지로 저장
             img_stream3 = io.BytesIO()
             plt.savefig(img_stream3, format='png', bbox_inches='tight', pad_inches=0.01)
             img_stream3.seek(0)
             # plt.close('all')
 
+            return img_stream1, img_stream2, img_stream3
+
+        # For STS grid,
+        else:
+            # 첫 번째 이미지 (topography)
+            fig = plt.figure(figsize=figsize)
+            ax = fig.add_subplot(111)      
+            topo = nr.nanonis_3ds.Topo(data)
+            z_data = topo.get_z ('subtract linear fit')
+            origin = 'lower'
+            vmin, vmax = self.get_3sigma_limits(z_data)
+            nanox = nr.cmap_custom.nanox()
+            bwr = nr.cmap_custom.bwr()
+            
+            # 이미지 플롯
+            im = ax.imshow(z_data, origin=origin, vmin=vmin, vmax=vmax, 
+                        aspect=params['aspect_ratio'], cmap=nanox, interpolation='none')
+
+            # colorbar 추가
+            plt.draw()
+            posn = ax.get_position()
+            cax = fig.add_axes([posn.x1 + 0.01, posn.y0, 
+                                0.02, posn.height])
+            plt.colorbar(im, cax=cax)
+
+            # figure를 이미지로 저장
+            img_stream1 = io.BytesIO()
+            plt.savefig(img_stream1, format='png', bbox_inches='tight', pad_inches=0.01)
+            img_stream1.seek(0)
+            # plt.close('all')
+
+            # 두 번째 이미지 (dI/dV map)
+            fig = plt.figure(figsize=figsize)
+            ax = fig.add_subplot(111)
+            spec = nr.nanonis_3ds.Map(data)
+
+            idx = (nearest (spec.signals['sweep_signal'], -0.3)[0] or
+                   nearest (spec.signals['sweep_signal'], 8.2)[0] )
+
+            didvmap = spec.get_didvmap (sweep_idx=idx)
+            vmin, vmax = self.get_3sigma_limits(didvmap)
+            im = ax.imshow(didvmap, origin=origin, vmin=vmin, vmax=vmax, 
+                        aspect=params['aspect_ratio'], cmap=bwr, interpolation='none')
+
+            # colorbar 추가
+            plt.draw()
+            posn = ax.get_position()
+            cax = fig.add_axes([posn.x1 + 0.01, posn.y0, 0.02, posn.height])
+            cbar = plt.colorbar(im, cax=cax)
+            cbar.formatter.set_powerlimits((-3, 4))  # scientific notation 사용 범위 설정
+            cbar.update_ticks()
+
+            # figure를 이미지로 저장
+            img_stream2 = io.BytesIO()
+            plt.savefig(img_stream2, format='png', bbox_inches='tight', pad_inches=0.01)
+            img_stream2.seek(0)
+            # plt.close('all')
+
+            # # 세 번째 이미지 (individual and average STS curves)
+            # fig = plt.figure(figsize=figsize)
+            # ax = fig.add_subplot(111)
+            # spec = nr.nanonis_3ds.Map(data)
+            # barrier_height = spec.get_apparent_barrier_height_map ('AVG')[0]
+            # vmin, vmax = self.get_3sigma_limits(barrier_height)
+            # im = ax.imshow(barrier_height, origin=origin, vmin=vmin, vmax=vmax, 
+            #             aspect=params['aspect_ratio'], cmap=bwr, interpolation='none')
+
+            # # colorbar 추가
+            # plt.draw()
+            # posn = ax.get_position()
+            # cax = fig.add_axes([posn.x1 + 0.01, posn.y0, 0.02, posn.height])
+            # cbar = plt.colorbar(im, cax=cax)
+            # cbar.formatter.set_powerlimits((-3, 4))  # scientific notation 사용 범위 설정
+            # cbar.update_ticks()
+
+            # # figure를 이미지로 저장
+            # img_stream3 = io.BytesIO()
+            # plt.savefig(img_stream3, format='png', bbox_inches='tight', pad_inches=0.01)
+            # img_stream3.seek(0)
+            # # plt.close('all')
+
+            # Average STS
+            fig = plt.figure(figsize=figsize)
+            ax = fig.add_subplot(111)
+            spec = nr.nanonis_3ds.PtSpec(data)
+            lines, pixels = np.shape(z_data)
+
+            # 모든 didv 데이터를 한 번에 수집
+            didv_data = [spec.get_didv_raw(i, j, channel='LI Demod 1 X (A)')[1] 
+                        for i in range(lines) 
+                        for j in range(pixels)]
+
+            # 전압 데이터는 한 번만 가져옴 (모든 지점에서 동일함)
+            v = spec.get_didv_raw(0, 0, channel='LI Demod 1 X (A)')[0]
+
+            # 모든 곡선을 한 번에 플롯
+            plt.plot(v, np.array(didv_data).T * 1e9, 'k-', alpha=0.2, lw=0.2)
+
+            # 평균 곡선 계산 및 플롯
+            didv_avg = np.nanmean(didv_data, axis=0)
+            plt.plot(v, didv_avg * 1e9, 'r-')
+
+            plt.xlabel('Bias (V)')
+            plt.ylabel('dI/dV (a.u.)')
+            img_stream3 = io.BytesIO()
+            plt.savefig(img_stream3, format='png', bbox_inches='tight', pad_inches=0.1)
+            img_stream3.seek(0)
+            # plt.close('all')
 
             return img_stream1, img_stream2, img_stream3
         
