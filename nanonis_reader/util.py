@@ -9,6 +9,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import io
 from nanonis_reader.find_value import nearest
 
+
 class NanonisData:
     def __init__(self, base_path, file_number=None, keyword=None):
         '''
@@ -64,6 +65,7 @@ class NanonisData:
                     setattr(self, attr_name, getattr(data, attr_name))
         else:
             raise ValueError(f"Unsupported file extension: {extension}")
+
 
 class DataToPPT:
     def __init__(self, base_path, keyword=None, output_filename='output.pptx'):
@@ -207,7 +209,11 @@ class DataToPPT:
         else:
             params = {
                 'bias': data.header['Bias>Bias (V)'],
-                'current': data.header['Z-Controller>Setpoint'],
+                'current': (
+                            data.header.get('Z-Controller>Setpoint') or 
+                            data.header.get('Current>Current (A)') or 
+                            ''
+                ),
                 'sweep_start': (
                     data.header.get('Bias Spectroscopy>Sweep Start (V)') or
                     ''
@@ -279,19 +285,19 @@ class DataToPPT:
         # params['aspect_ratio'] = (params['pixels'][0]/params['pixels'][1])*(params['range'][1]/params['range'][0])
         # params['fname'] = data.fname
 
-        if all(key not in data.signals.keys() for key in ['LI Demod 1 X (A)', 'LI Demod 2 X (A)']):
+        if all(key not in data.signals.keys() for key in ['LI Demod 1 X (A)', 'LI Demod 1 X [AVG] (A)', 'LI Demod 2 X (A)', 'LI Demod 2 X [AVG] (A)']):
             params = {
                 'pixels': data.header['dim_px'],
                 'range': data.header['size_xy'],
                 'angle': data.header['angle'],
-                'bias': data.header['Bias>Bias (V)'],
-                'current': data.header['Z-Controller>Setpoint'],
+                'bias': (data.header.get('Bias>Bias (V)') or ''),
+                'current': (data.header.get('Z-Controller>Setpoint') or ''),
                 'sweep_num': (
                                 data.header.get('Z Spectroscopy>Number of sweeps') or
                                 ''
                             ),
-                'offset': data.header['Z Spectroscopy>Initial Z-offset (m)'],
-                'sweep_z': data.header['Z Spectroscopy>Sweep distance (m)'],
+                'offset': (data.header.get('Z Spectroscopy>Initial Z-offset (m)') or ''),
+                'sweep_z': (data.header.get('Z Spectroscopy>Sweep distance (m)') or ''),
                 'comment': (
                     data.header.get('Comment01') or
                     data.header.get('comment') or
@@ -306,8 +312,8 @@ class DataToPPT:
                 'pixels': data.header['dim_px'],
                 'range': data.header['size_xy'],
                 'angle': data.header['angle'],
-                'bias': data.header['Bias>Bias (V)'],
-                'current': data.header['Z-Controller>Setpoint'],
+                'bias': (data.header.get('Bias>Bias (V)') or ''),
+                'current': (data.header.get('Z-Controller>Setpoint') or ''),
                 'sweep_start': (
                     data.header.get('Bias Spectroscopy>Sweep Start (V)') or
                     ''
@@ -414,17 +420,23 @@ class DataToPPT:
             info_texts = []
             info_texts.append(f"{params['fname']}\n") # Data name
             info_texts.append(f"I-z spectroscopy grid\n") # "I-z spectrum"
-            info_texts.append(f"{float(params['bias'])} V /") # set bias
-            current = float(params['current'])
-            if abs(current) >= 1e-9: # set current
-                # nA 단위로 표시
-                info_texts.append(f"{current*1e9:.0f} nA")
+            info_texts.append(f"{float(params['bias'])} V /" if params.get('bias') else 'Set bias was not saved.\n') # set bias
+            if params.get('current'):
+                current = float(params['current'])
+                if abs(current) >= 1e-9: # set current
+                    # nA 단위로 표시
+                    info_texts.append(f"{current*1e9:.0f} nA")
+                else:
+                    # pA 단위로 표시
+                    info_texts.append(f"{current*1e12:.0f} pA")
             else:
-                # pA 단위로 표시
-                info_texts.append(f"{current*1e12:.0f} pA")
+                info_texts.append('Set point current was not saved.\n')
             # size (angle)
             # sweep $\Delta z$, number of sweep
-            info_texts.append(f"\n{float(params['offset'])*1e12:.0f} pm to {(float(params['offset'])+float(params['sweep_z']))*1e12:.0f} pm (sweeps: {params['sweep_num']})")
+            if params.get('offset') and params.get('sweep_z'):
+                info_texts.append(f"\n{float(params['offset'])*1e12:.0f} pm to {(float(params['offset'])+float(params['sweep_z']))*1e12:.0f} pm (sweeps: {params['sweep_num']})")
+            else:
+                info_texts.append('Z sweep range was not saved.\n')
             info_texts.append(f"\n{params['range'][0]*1e9:.0f} x {params['range'][1]*1e9:.0f} nm²")
             info_texts.append(f"({float(params['angle']):.1f}˚)")
             info_texts.append(f"\nComment: {params['comment']}")    
@@ -774,7 +786,7 @@ class DataToPPT:
 
             idx = (nearest (spec.signals['sweep_signal'], -100e-12)[0])
 
-            spec_z = spec.get_currentmap (sweep_idx=idx, sweep_direction = 'AVG')
+            spec_z = spec.get_currentmap (sweep_idx=idx)
             vmin, vmax = self.get_3sigma_limits(spec_z)
             im = ax.imshow(spec_z, origin=origin, vmin=vmin, vmax=vmax, 
                         aspect=params['aspect_ratio'], cmap=nanox, interpolation='none')
@@ -797,7 +809,7 @@ class DataToPPT:
             fig = plt.figure(figsize=figsize)
             ax = fig.add_subplot(111)
             spec = nr.nanonis_3ds.Map(data)
-            barrier_height = spec.get_apparent_barrier_height_map ('AVG')[0]
+            barrier_height = spec.get_apparent_barrier_height_map ()[0]
             vmin, vmax = self.get_3sigma_limits(barrier_height)
             im = ax.imshow(barrier_height, origin=origin, vmin=vmin, vmax=vmax, 
                         aspect=params['aspect_ratio'], cmap=bwr, interpolation='none')
@@ -904,7 +916,8 @@ class DataToPPT:
             lines, pixels = np.shape(z_data)
 
             # 모든 didv 데이터를 한 번에 수집
-            didv_data = [spec.get_didv_raw(i, j, channel='LI Demod 1 X (A)')[1] 
+            # grid를 얻는 도중 멈출 경우, 나머지 data는 [0,0, ..., 0] -> [nan, nan, ..., nan]으로 처리.
+            didv_data = [np.where( np.all( (data := spec.get_didv_raw(i, j, channel='LI Demod 1 X (A)')[1]) == 0 ), np.nan, data ) 
                         for i in range(lines) 
                         for j in range(pixels)]
 
