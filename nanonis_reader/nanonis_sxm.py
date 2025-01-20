@@ -317,6 +317,8 @@ class didvmap:
             return self.raw(scan_direction, channel)
         elif processing == 'subtract linear fit':
             return self.subtract_linear_fit(scan_direction, channel)
+        elif processing == 'subtract linear fit xy':
+            return self.subtract_linear_fit_xy(scan_direction, channel)
         
     def raw(self, scan_direction, channel):
         if scan_direction == 'fwd':
@@ -346,6 +348,34 @@ class didvmap:
         
         # 결과 저장
         z_sublf[valid_rows] = valid_z - fitted
+        
+        return z_sublf
+    
+    def subtract_linear_fit_xy(self, scan_direction, channel):
+        # X 방향 linear fit 제거
+        z = self.subtract_linear_fit(scan_direction, channel)
+        lines, pixels = np.shape(z)
+        
+        # y 방향으로의 linear fit을 위한 x 좌표 (실제 물리적 거리 사용)
+        yrange = round(self.header['scan_range'][1] * 1e9)*1e-9
+        y = np.linspace(0, yrange, lines)
+        
+        # nan이 있는 열 찾기
+        nan_cols = np.isnan(z).any(axis=0)
+        
+        # 결과 배열 초기화 (nan으로)
+        z_sublf = np.full_like(z, np.nan)
+        
+        # nan이 없는 열들에 대해 처리
+        valid_cols = ~nan_cols
+        valid_z = z[:, valid_cols]
+        
+        # 한번에 모든 유효한 열에 대해 선형 피팅
+        coeffs = np.polyfit(y, valid_z, 1)
+        fitted = (coeffs[0] * y.reshape(-1,1) + coeffs[1])
+        
+        # 결과 저장
+        z_sublf[:, valid_cols] = valid_z - fitted
         
         return z_sublf
 
