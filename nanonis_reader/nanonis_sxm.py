@@ -155,26 +155,54 @@ class topography:
         return z_sublf
     
     
-    def subtract_linear_fit_xy (self, scan_direction):       
-        def f_lin(x, a, b): return a*x + b
-        xrange = round(self.header['scan_range'][0] * 1e9)*1e-9
-        z = self.subtract_linear_fit(scan_direction)
-        z_sublf = np.zeros(np.shape(z))
-        lines, pixels = np.shape(z)
-        for i in range(lines):
-            if np.shape(np.where(np.isnan(z))[0])[0] != 0: # image에 nan값이 포함되어 있을 경우 (== scan을 도중에 멈추었을 경우)
-                if i < np.min(np.where(np.isnan(z))[0]):
-                    x = np.linspace(0, xrange, pixels)
-                    popt, pcov = curve_fit(f_lin, x, z.T[i])
-                    z_sublf[i] = z.T[i] - f_lin(x, *popt)
-                else:
-                    z_sublf[i] = np.nan
-            else:
-                x = np.linspace(0, xrange, pixels)
-                popt, pcov = curve_fit(f_lin, x, z.T[i]) # x - ith line: linear fitting
-                z_sublf[i] = z.T[i] - f_lin(x, *popt)
+    # def subtract_linear_fit_xy (self, scan_direction):       
+    #     def f_lin(x, a, b): return a*x + b
+    #     xrange = round(self.header['scan_range'][0] * 1e9)*1e-9
+    #     z = self.subtract_linear_fit(scan_direction)
+    #     z_sublf = np.zeros(np.shape(z))
+    #     lines, pixels = np.shape(z)
+    #     for i in range(lines):
+    #         if np.shape(np.where(np.isnan(z))[0])[0] != 0: # image에 nan값이 포함되어 있을 경우 (== scan을 도중에 멈추었을 경우)
+    #             if i < np.min(np.where(np.isnan(z))[0]):
+    #                 x = np.linspace(0, xrange, pixels)
+    #                 popt, pcov = curve_fit(f_lin, x, z.T[i])
+    #                 z_sublf[i] = z.T[i] - f_lin(x, *popt)
+    #             else:
+    #                 z_sublf[i] = np.nan
+    #         else:
+    #             x = np.linspace(0, xrange, pixels)
+    #             popt, pcov = curve_fit(f_lin, x, z.T[i]) # x - ith line: linear fitting
+    #             z_sublf[i] = z.T[i] - f_lin(x, *popt)
 
-        return z_sublf.T
+    #     return z_sublf.T
+
+    def subtract_linear_fit_xy(self, scan_direction):
+        # X 방향 linear fit 제거
+        z = self.subtract_linear_fit(scan_direction)
+        lines, pixels = np.shape(z)
+        
+        # y 방향으로의 linear fit을 위한 x 좌표 (실제 물리적 거리 사용)
+        yrange = round(self.header['scan_range'][1] * 1e9)*1e-9
+        y = np.linspace(0, yrange, lines)
+        
+        # nan이 있는 열 찾기
+        nan_cols = np.isnan(z).any(axis=0)
+        
+        # 결과 배열 초기화 (nan으로)
+        z_sublf = np.full_like(z, np.nan)
+        
+        # nan이 없는 열들에 대해 처리
+        valid_cols = ~nan_cols
+        valid_z = z[:, valid_cols]
+        
+        # 한번에 모든 유효한 열에 대해 선형 피팅
+        coeffs = np.polyfit(y, valid_z, 1)
+        fitted = (coeffs[0] * y.reshape(-1,1) + coeffs[1])
+        
+        # 결과 저장
+        z_sublf[:, valid_cols] = valid_z - fitted
+        
+        return z_sublf
 
     def subtract_parabolic_fit (self, scan_direction):
         def f_parab(x, a, b, c): return a*(x**2) + b*x + c
