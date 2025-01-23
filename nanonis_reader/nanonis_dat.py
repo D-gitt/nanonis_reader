@@ -2,7 +2,10 @@ import nanonispy as nap
 import numpy as np
 import os
 from scipy.optimize import curve_fit
-from scipy.integrate import cumtrapz
+try:
+    from scipy.integrate import cumtrapz # scipy old version (before 1.14.0)
+except:
+    from scipy.integrate import cumulative_trapezoid # scipy new version (after 1.14.0)
 
 
 # Only forward sweeps can be plotted right now. Need to add codes for backward.
