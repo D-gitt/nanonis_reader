@@ -5,7 +5,7 @@ from scipy.optimize import curve_fit
 try:
     from scipy.integrate import cumtrapz # scipy old version (before 1.14.0)
 except:
-    from scipy.integrate import cumulative_trapezoid # scipy new version (after 1.14.0)
+    from scipy.integrate import cumulative_trapezoid as cumtrapz # scipy new version (after 1.14.0)
 
 
 # Only forward sweeps can be plotted right now. Need to add codes for backward.
