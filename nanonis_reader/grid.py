@@ -17,7 +17,7 @@ class load:
         self.signals = nap.read.Grid(filepath).signals
 
 
-class Topo:
+class topography:
         
     def __init__(self, instance):
         self.fname = instance.fname
@@ -108,7 +108,7 @@ class Topo:
         return z_deriv
 
 
-class Map:  # dIdV, I-z spec, apparent barrier map
+class map:  # dIdV, I-z spec, apparent barrier map
     def __init__(self, instance, sweep_direction='fwd'):
         self.fname = instance.fname
         self.header = instance.header
@@ -200,7 +200,7 @@ class Map:  # dIdV, I-z spec, apparent barrier map
         return self.signals['sweep_signal'][sweep_idx]
 
 
-class PtSpec:  # any spectrum (dIdV, Z, I, ...) vs sweep_signal at any point.
+class point_spectrum:  # any spectrum (dIdV, Z, I, ...) vs sweep_signal at any point.
         
     def __init__(self, instance, sweep_direction='fwd'):
         self.fname = instance.fname
@@ -332,7 +332,7 @@ class PtSpec:  # any spectrum (dIdV, Z, I, ...) vs sweep_signal at any point.
         return self.signals['sweep_signal'], self.signals[current_channel][line, pixel]
 
 
-class LineSpec: # any spectrum (dIdV, Z, I, ...) vs sweep_signal at any point.
+class line_spectrum: # any spectrum (dIdV, Z, I, ...) vs sweep_signal at any point.
     def __init__(self, instance):
         self.fname = instance.fname
         self.header = instance.header
