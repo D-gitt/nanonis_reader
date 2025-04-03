@@ -6,7 +6,7 @@ from scipy.optimize import curve_fit
 from scipy.linalg import lstsq
 
 
-class Load:
+class load:
     def __init__(self, filepath):
         self.fname = os.path.basename(filepath)
         self.header = nap.read.Scan(filepath).header

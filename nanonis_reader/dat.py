@@ -9,7 +9,7 @@ except:
 
 
 # Only forward sweeps can be plotted right now. Need to add codes for backward.
-class Load:
+class load:
     def __init__(self, filepath):
         self.fname = os.path.basename(filepath)
         self.header = nap.read.Spec(filepath).header
