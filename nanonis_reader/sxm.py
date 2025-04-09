@@ -6,11 +6,11 @@ from scipy.optimize import curve_fit
 from scipy.linalg import lstsq
 
 
-class load:
-    def __init__(self, filepath):
-        self.fname = os.path.basename(filepath)
-        self.header = nap.read.Scan(filepath).header
-        self.signals = nap.read.Scan(filepath).signals
+# class load:
+#     def __init__(self, filepath):
+#         self.fname = os.path.basename(filepath)
+#         self.header = nap.read.Scan(filepath).header
+#         self.signals = nap.read.Scan(filepath).signals
         
 
 class topography:

@@ -10,11 +10,11 @@ except:
     from scipy.integrate import cumulative_trapezoid
 
 
-class load:
-    def __init__(self, filepath):
-        self.fname = os.path.basename(filepath)
-        self.header = nap.read.Grid(filepath).header
-        self.signals = nap.read.Grid(filepath).signals
+# class load:
+#     def __init__(self, filepath):
+#         self.fname = os.path.basename(filepath)
+#         self.header = nap.read.Grid(filepath).header
+#         self.signals = nap.read.Grid(filepath).signals
 
 
 class topography:

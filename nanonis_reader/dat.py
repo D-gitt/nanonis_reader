@@ -9,11 +9,11 @@ except:
 
 
 # Only forward sweeps can be plotted right now. Need to add codes for backward.
-class load:
-    def __init__(self, filepath):
-        self.fname = os.path.basename(filepath)
-        self.header = nap.read.Spec(filepath).header
-        self.signals = nap.read.Spec(filepath).signals
+# class load:
+#     def __init__(self, filepath):
+#         self.fname = os.path.basename(filepath)
+#         self.header = nap.read.Spec(filepath).header
+#         self.signals = nap.read.Spec(filepath).signals
 
 class spectrum:
     
