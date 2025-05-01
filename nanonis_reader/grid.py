@@ -337,7 +337,7 @@ class point_didv:
             
         return self.signals['sweep_signal'], didv
 
-    def get_didv_scaled(self, line, pixel, channel='LI Demod 2 X', offset='none'):
+    def get_didv_scaled(self, line, pixel, channel='LI Demod 1 X', offset='none'):
         """
         Returns
         -------
@@ -348,7 +348,7 @@ class point_didv:
                 np.median(self.get_didv_numerical(line, pixel)[1]/self.get_didv_raw(line, pixel, channel, offset)[1])\
                 *self.get_didv_raw(line, pixel, channel, offset)[1]
     
-    def get_didv_normalized(self, line, pixel, channel='LI Demod 2 X', factor=0.2, offset='none', delete_zero_bias=False):
+    def get_didv_normalized(self, line, pixel, channel='LI Demod 1 X', factor=0.2, offset='none', delete_zero_bias=True):
         """
         Returns
         -------
@@ -374,6 +374,43 @@ class point_didv:
         if delete_zero_bias:
             return np.delete(V, zero), np.delete(Normalized_dIdV, zero)
         return V, Normalized_dIdV
+
+    def get_didv_normalized_rev(self, line, pixel, channel='LI Demod 1 X', factor=0.2, offset='none', delete_zero_bias=True):
+        """
+        Returns
+        -------
+        tuple
+            (Bias (V), normalized dIdV)
+        """
+        V, dIdV = self.get_didv_scaled(line, pixel, channel, offset='none')
+        try:
+            I_cal = cumtrapz(dIdV, V, initial=0)
+        except:
+            I_cal = cumulative_trapezoid(dIdV, V, initial=0)
+            
+        zero = np.argwhere(abs(V) == np.min(abs(V)))[0, 0]
+        
+        with np.errstate(divide='ignore'): # Ignore the warning of zero division.
+            if V[zero] == 0: # The case V has 0 as an element.
+                I_cal -= I_cal[zero]  # Offset for I(V=0) = 0
+                IV_cal = I_cal/V
+                
+                # linear interpolation for I/V at 0 V: y = mx + b
+                m = (IV_cal[zero+1] - IV_cal[zero-1]) / (V[zero+1] - V[zero-1])
+                b = IV_cal[zero+1] - m * V[zero+1]
+                IV_cal[zero] = b
+            else:
+                popt, _ = curve_fit(lambda x, a, b: a*x + b, V[zero-1:zero+2], I_cal[zero-1:zero+2])
+                I_cal -= popt[1]
+                IV_cal = I_cal/V
+        
+        delta = factor*np.nanmedian(IV_cal)
+        Normalized_dIdV = dIdV / np.sqrt(np.square(delta) + np.square(IV_cal))
+        
+        if delete_zero_bias:
+            return np.delete(V, zero), np.delete(Normalized_dIdV, zero)
+        else:
+            return V, Normalized_dIdV
 
     def get_didv_numerical(self, line, pixel):
         """
@@ -585,7 +622,7 @@ class point_iz:
 #         popt, pcov = curve_fit(linear, z[idx], np.log(I[idx]), p0=[5.5, 1.2])
 #         return popt[0]  # apparent_barrier_height
 
-#     def get_didv_scaled(self, line, pixel, channel='LI Demod 2 X', offset='none'):
+#     def get_didv_scaled(self, line, pixel, channel='LI Demod 1 X', offset='none'):
 #         """
 #         Returns
 #         -------
@@ -596,7 +633,7 @@ class point_iz:
 #                 np.median(self.get_didv_numerical(line, pixel)[1]/self.get_didv_raw(line, pixel, channel, offset)[1])\
 #                 *self.get_didv_raw(line, pixel, channel, offset)[1]
     
-#     def get_didv_normalized(self, line, pixel, channel='LI Demod 2 X', factor=0.2, offset='none', delete_zero_bias=False):
+#     def get_didv_normalized(self, line, pixel, channel='LI Demod 1 X', factor=0.2, offset='none', delete_zero_bias=True):
 #         """
 #         Returns
 #         -------
@@ -652,7 +689,7 @@ class line_spectrum: # any spectrum (dIdV, Z, I, ...) vs sweep_signal at any poi
         self.header = instance.header
         self.signals = instance.signals
     
-    # def get (self, line, sts='scaled', channel='LI Demod 2 X (A)', factor=0.2, offset='none', delete_zero_bias=False):
+    # def get (self, line, sts='scaled', channel='LI Demod 1 X (A)', factor=0.2, offset='none', delete_zero_bias=True):
     def get (self, line, processing='scaled', **kwargs):
         if processing == 'scaled':
             spec = self.get_didv_scaled
@@ -692,7 +729,7 @@ class line_spectrum: # any spectrum (dIdV, Z, I, ...) vs sweep_signal at any poi
         np.median(self.get_didv_numerical(line, pixel)[1]/self.get_didv_raw(line, pixel, channel, offset)[1])\
         *self.get_didv_raw(line, pixel, channel, offset)[1]
     
-    def get_didv_normalized (self, line, pixel, channel='LI Demod 2 X (A)', factor=0.2, offset='none', delete_zero_bias=False):
+    def get_didv_normalized (self, line, pixel, channel='LI Demod 1 X (A)', factor=0.2, offset='none', delete_zero_bias=True):
         '''
         Returns
         -------
@@ -722,6 +759,43 @@ class line_spectrum: # any spectrum (dIdV, Z, I, ...) vs sweep_signal at any poi
             return V, Normalized_dIdV
         else:
             return np.delete(V, zero), np.delete(Normalized_dIdV, zero)
+
+    def get_didv_normalized_rev(self, line, pixel, channel='LI Demod 1 X', factor=0.2, offset='none', delete_zero_bias=True):
+        """
+        Returns
+        -------
+        tuple
+            (Bias (V), normalized dIdV)
+        """
+        V, dIdV = self.get_didv_scaled(line, pixel, channel, offset='none')
+        try:
+            I_cal = cumtrapz(dIdV, V, initial=0)
+        except:
+            I_cal = cumulative_trapezoid(dIdV, V, initial=0)
+            
+        zero = np.argwhere(abs(V) == np.min(abs(V)))[0, 0]
+        
+        with np.errstate(divide='ignore'): # Ignore the warning of zero division.
+            if V[zero] == 0: # The case V has 0 as an element.
+                I_cal -= I_cal[zero]  # Offset for I(V=0) = 0
+                IV_cal = I_cal/V
+                
+                # linear interpolation for I/V at 0 V: y = mx + b
+                m = (IV_cal[zero+1] - IV_cal[zero-1]) / (V[zero+1] - V[zero-1])
+                b = IV_cal[zero+1] - m * V[zero+1]
+                IV_cal[zero] = b
+            else:
+                popt, _ = curve_fit(lambda x, a, b: a*x + b, V[zero-1:zero+2], I_cal[zero-1:zero+2])
+                I_cal -= popt[1]
+                IV_cal = I_cal/V
+        
+        delta = factor*np.nanmedian(IV_cal)
+        Normalized_dIdV = dIdV / np.sqrt(np.square(delta) + np.square(IV_cal))
+        
+        if delete_zero_bias:
+            return np.delete(V, zero), np.delete(Normalized_dIdV, zero)
+        else:
+            return V, Normalized_dIdV
 
     def get_didv_numerical (self, line, pixel):
         '''
