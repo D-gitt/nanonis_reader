@@ -26,3 +26,7 @@ nanonis_reader.egg-info/PKG-INFO
 nanonis_reader.egg-info/requires.txt
 nanonis_reader.egg-info/SOURCES.txt
 nanonis_reader.egg-info/top_level.txt
+nanonis_reader/__pycache__/base.cpython-312.pyc
+nanonis_reader/__pycache__/dat.cpython-312.pyc
+nanonis_reader/__pycache__/grid.cpython-312.pyc
+nanonis_reader/__pycache__/sxm.cpython-312.pyc
