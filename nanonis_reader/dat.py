@@ -165,7 +165,40 @@ class spectrum:
         if delete_zero_bias:
             return np.delete(V, zero), np.delete(Normalized_dIdV, zero)
         return V, Normalized_dIdV
-    
+
+    def didv_normalized_rev(self, factor=0.2, delete_zero_bias=True):
+        """
+        Returns
+        -------
+        tuple
+            (Bias (V), normalized dIdV)
+        """
+        V, dIdV = self.didv_scaled()
+        I_cal = cumtrapz(dIdV, V, initial=0)
+        zero = np.argwhere(abs(V) == np.min(abs(V)))[0, 0]
+        
+        with np.errstate(divide='ignore'): # Ignore the warning of zero division.
+            if V[zero] == 0: # The case V has 0 as an element.
+                I_cal -= I_cal[zero]  # Offset for I(V=0) = 0
+                IV_cal = I_cal/V
+                
+                # linear interpolation for I/V at 0 V: y = mx + b
+                m = (IV_cal[zero+1] - IV_cal[zero-1]) / (V[zero+1] - V[zero-1])
+                b = IV_cal[zero+1] - m * V[zero+1]
+                IV_cal[zero] = b
+            else:
+                popt, _ = curve_fit(lambda x, a, b: a*x + b, V[zero-1:zero+2], I_cal[zero-1:zero+2])
+                I_cal -= popt[1]
+                IV_cal = I_cal/V
+        
+        delta = factor*np.nanmedian(IV_cal)
+        Normalized_dIdV = dIdV / np.sqrt(np.square(delta) + np.square(IV_cal))
+        
+        if delete_zero_bias:
+            return np.delete(V, zero), np.delete(Normalized_dIdV, zero)
+        else:
+            return V, Normalized_dIdV
+
     def iv_raw(self):
         '''
         Returns
