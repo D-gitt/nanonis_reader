@@ -7,7 +7,7 @@ from scipy.linalg import lstsq
 try:
     from scipy.integrate import cumtrapz
 except:
-    from scipy.integrate import cumulative_trapezoid
+    from scipy.integrate import cumulative_trapezoid as cumtrapz
 
 
 # class load:
@@ -356,11 +356,8 @@ class point_didv:
             (Bias (V), normalized dIdV)
         """
         V, dIdV = self.get_didv_scaled(line, pixel, channel, offset='none')
-        try:
-            I_cal = cumtrapz(dIdV, V, initial=0)
-        except:
-            I_cal = cumulative_trapezoid(dIdV, V, initial=0)
-            
+        I_cal = cumtrapz(dIdV, V, initial=0)
+
         zero = np.argwhere(abs(V) == np.min(abs(V)))[0, 0]
         popt, pcov = curve_fit(lambda x, a, b: a*x + b, V[zero-1:zero+2], I_cal[zero-1:zero+2])
         I_cal -= popt[1]
@@ -383,13 +380,10 @@ class point_didv:
             (Bias (V), normalized dIdV)
         """
         V, dIdV = self.get_didv_scaled(line, pixel, channel, offset='none')
-        try:
-            I_cal = cumtrapz(dIdV, V, initial=0)
-        except:
-            I_cal = cumulative_trapezoid(dIdV, V, initial=0)
-            
+        I_cal = cumtrapz(dIdV, V, initial=0)
+
         zero = np.argwhere(abs(V) == np.min(abs(V)))[0, 0]
-        
+
         with np.errstate(divide='ignore'): # Ignore the warning of zero division.
             if V[zero] == 0: # The case V has 0 as an element.
                 I_cal -= I_cal[zero]  # Offset for I(V=0) = 0
@@ -632,7 +626,7 @@ class point_iz:
 #         return self.signals['sweep_signal'], \
 #                 np.median(self.get_didv_numerical(line, pixel)[1]/self.get_didv_raw(line, pixel, channel, offset)[1])\
 #                 *self.get_didv_raw(line, pixel, channel, offset)[1]
-    
+
 #     def get_didv_normalized(self, line, pixel, channel='LI Demod 1 X', factor=0.2, offset='none', delete_zero_bias=True):
 #         """
 #         Returns
@@ -641,11 +635,8 @@ class point_iz:
 #             (Bias (V), normalized dIdV)
 #         """
 #         V, dIdV = self.get_didv_scaled(line, pixel, channel, offset='none')
-#         try:
-#             I_cal = cumtrapz(dIdV, V, initial=0)
-#         except:
-#             I_cal = cumulative_trapezoid(dIdV, V, initial=0)
-            
+#         I_cal = cumtrapz(dIdV, V, initial=0)
+#
 #         zero = np.argwhere(abs(V) == np.min(abs(V)))[0, 0]
 #         popt, pcov = curve_fit(lambda x, a, b: a*x + b, V[zero-1:zero+2], I_cal[zero-1:zero+2])
 #         I_cal -= popt[1]
@@ -730,19 +721,16 @@ class line_spectrum: # any spectrum (dIdV, Z, I, ...) vs sweep_signal at any poi
         *self.get_didv_raw(line, pixel, channel, offset)[1]
     
     def get_didv_normalized (self, line, pixel, channel='LI Demod 1 X (A)', factor=0.2, offset='none', delete_zero_bias=True):
-        '''
+        """
         Returns
         -------
         tuple
             (Bias (V), normalized dIdV)
-        '''
-        
+        """
         # dIdV, V = self.get_didv_scaled(line, pixel, channel)[1], self.signals['sweep_signal']
         V, dIdV = self.get_didv_scaled(line, pixel, channel, offset = 'none')
-        try:
-            I_cal = cumtrapz(dIdV, V, initial = 0)
-        except:
-            I_cal = cumulative_trapezoid(dIdV, V, initial = 0)
+        I_cal = cumtrapz(dIdV, V, initial=0)
+
         zero = np.argwhere ( abs(V) == np.min(abs(V)) )[0, 0] # The index where V = 0 or nearest to 0.
         popt, pcov = curve_fit (lambda x, a, b: a*x + b, V[zero-1:zero+2], I_cal[zero-1:zero+2])
         I_cal -= popt[1]
@@ -768,13 +756,10 @@ class line_spectrum: # any spectrum (dIdV, Z, I, ...) vs sweep_signal at any poi
             (Bias (V), normalized dIdV)
         """
         V, dIdV = self.get_didv_scaled(line, pixel, channel, offset='none')
-        try:
-            I_cal = cumtrapz(dIdV, V, initial=0)
-        except:
-            I_cal = cumulative_trapezoid(dIdV, V, initial=0)
-            
+        I_cal = cumtrapz(dIdV, V, initial=0)
+
         zero = np.argwhere(abs(V) == np.min(abs(V)))[0, 0]
-        
+
         with np.errstate(divide='ignore'): # Ignore the warning of zero division.
             if V[zero] == 0: # The case V has 0 as an element.
                 I_cal -= I_cal[zero]  # Offset for I(V=0) = 0
