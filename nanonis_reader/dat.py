@@ -57,7 +57,7 @@ class spectrum:
     
     def __init__(self, instance, sts_channel='LI Demod 1 X (A)', sweep_direction='fwd'):
         # Input validation
-        if sts_channel not in ['LI Demod 1 X (A)', 'LI Demod 2 X (A)']:
+        if sts_channel not in ['LI Demod 1 X (A)', 'LI Demod 2 X (A)', 'LIX 1 omega (A)']:
             raise ValueError("sts_channel must be 'LI Demod 1 X (A)' or 'LI Demod 2 X (A)'")
         if sweep_direction not in ['fwd', 'bwd']:
             raise ValueError("sweep_direction must be 'fwd' or 'bwd'")
