@@ -1106,7 +1106,7 @@ class DataToPPT:
         
         # PPT 저장
         # save_path = self.base_path + 'PPT/'
-        save_path = '~/Downloads/'
+        save_path = os.path.expanduser('~/Downloads/')
         if not os.path.exists(save_path):
             os.makedirs(save_path)
         self.prs.save(save_path + self.output_filename)
