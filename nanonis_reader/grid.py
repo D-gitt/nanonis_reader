@@ -392,7 +392,14 @@ class point_iz:
             I = np.abs(self.signals[channel_name][line, pixel])
 
         idx = np.where((fitting_current_range[0] <= I) & (I <= fitting_current_range[1]))
-        popt, pcov = curve_fit(linear, z[idx], np.log(I[idx]), p0=[5.5, 1.2])
+        idxz0 = np.argwhere(z == np.min(np.abs(z)))[0, 0]
+        dI = np.log(fitting_current_range[1]) - np.log(fitting_current_range[0])
+        dz = z[idx][-1] - z[idx][0]
+        slope = dI/dz
+        barr = ((slope * (6.582119569e-16*2.99792458e+8)/(-2))**2)/(2*0.51099895e+6)
+
+        popt, pcov = curve_fit(linear, z[idx], np.log(I[idx]), p0=[barr, np.log(I[idxz0])])
+        # popt, pcov = curve_fit(linear, z[idx], np.log(I[idx]), p0=[5.5, 1.2])
         return popt[0]  # apparent_barrier_height
 
 class izmap(point_iz):  # I-z spec, apparent barrier map
