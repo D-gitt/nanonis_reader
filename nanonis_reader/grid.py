@@ -254,6 +254,48 @@ class point_iz:
         self.signals = instance.signals
         self.sweep_dir = sweep_direction
 
+    def get_channel_name(self, base_channel, include_avg=False, bwd=None):
+        """
+        Parameters:
+        -----------
+        base_channel : str
+            Base channel name (e.g., 'LI Demod 1 X (A)' or 'Current (A)')
+        include_avg : bool
+            Whether to include the [AVG] tag
+        bwd : bool or None
+            If True, forces [bwd] tag. If None, uses self.sweep_dir
+        """
+        channel_base = base_channel.replace(' (A)', '')
+        
+        tags = []
+        if include_avg:
+            tags.append('[AVG]')
+        if bwd or (bwd is None and self.sweep_dir == 'bwd'):
+            tags.append('[bwd]')
+            
+        if tags:
+            channel_name = f"{channel_base} {' '.join(tags)} (A)"
+        else:
+            channel_name = f"{channel_base} (A)"
+            
+        return channel_name
+    
+    def has_averaged_data(self):
+        """
+        Checks if the dataset contains averaged signals.
+        """
+        return 'Current [AVG] (A)' in self.signals.keys()
+
+    def get_iz_raw(self, line, pixel):
+        """
+        Returns
+        -------
+        tuple
+            (Z (m), Current (A))
+        """        
+        current_channel = self.get_channel_name('Current', include_avg=self.has_averaged_data())
+        return self.signals['sweep_signal'], self.signals[current_channel][line, pixel]
+
     def get_apparent_barrier_height(self, line, pixel, fitting_current_range=(1e-12, 10e-12)):
         def linear(x, barr, b):
             return -2*(np.sqrt(2*0.51099895e+6*barr)/(6.582119569e-16*2.99792458e+8))*x + b
