@@ -247,73 +247,7 @@ class point_didv:
         current_channel = self.get_channel_name('Current', include_avg=self.has_averaged_data())
         return self.signals['sweep_signal'], self.signals[current_channel][line, pixel]
 
-class point_iz:
-    def __init__(self, instance, sweep_direction='fwd'):
-        self.fname = instance.fname
-        self.header = instance.header
-        self.signals = instance.signals
-        self.sweep_dir = sweep_direction
-
-    def get_channel_name(self, base_channel, include_avg=False, bwd=None):
-        """
-        Parameters:
-        -----------
-        base_channel : str
-            Base channel name (e.g., 'LI Demod 1 X (A)' or 'Current (A)')
-        include_avg : bool
-            Whether to include the [AVG] tag
-        bwd : bool or None
-            If True, forces [bwd] tag. If None, uses self.sweep_dir
-        """
-        channel_base = base_channel.replace(' (A)', '')
-        
-        tags = []
-        if include_avg:
-            tags.append('[AVG]')
-        if bwd or (bwd is None and self.sweep_dir == 'bwd'):
-            tags.append('[bwd]')
-            
-        if tags:
-            channel_name = f"{channel_base} {' '.join(tags)} (A)"
-        else:
-            channel_name = f"{channel_base} (A)"
-            
-        return channel_name
-    
-    def has_averaged_data(self):
-        """
-        Checks if the dataset contains averaged signals.
-        """
-        return 'Current [AVG] (A)' in self.signals.keys()
-
-    def get_iz_raw(self, line, pixel):
-        """
-        Returns
-        -------
-        tuple
-            (Z (m), Current (A))
-        """        
-        current_channel = self.get_channel_name('Current', include_avg=self.has_averaged_data())
-        return self.signals['sweep_signal'], self.signals[current_channel][line, pixel]
-
-    def get_apparent_barrier_height(self, line, pixel, fitting_current_range=(1e-12, 10e-12)):
-        def linear(x, barr, b):
-            return -2*(np.sqrt(2*0.51099895e+6*barr)/(6.582119569e-16*2.99792458e+8))*x + b
-        
-        z = self.signals['sweep_signal']
-        if self.sweep_dir == 'AVG':
-            fwd_current = self.signals[self.get_channel_name('Current', include_avg=self.has_averaged_data())][line, pixel]
-            bwd_current = self.signals[self.get_channel_name('Current', include_avg=self.has_averaged_data(), bwd=True)][line, pixel]
-            I = np.abs(np.nanmean([fwd_current, bwd_current], axis=0))
-        else:
-            channel_name = self.get_channel_name('Current', include_avg=self.has_averaged_data())
-            I = np.abs(self.signals[channel_name][line, pixel])
-
-        idx = np.where((fitting_current_range[0] <= I) & (I <= fitting_current_range[1]))
-        popt, pcov = curve_fit(linear, z[idx], np.log(I[idx]), p0=[5.5, 1.2])
-        return popt[0]  # apparent_barrier_height
-
-class didvmap(point_didv):  # dIdV, I-z spec, apparent barrier map
+class didvmap(point_didv):  # dIdV
     def __init__(self, instance, sweep_direction='fwd'):
         super().__init__(instance, sweep_direction)
 
@@ -395,13 +329,13 @@ class didvmap(point_didv):  # dIdV, I-z spec, apparent barrier map
     def get_sweepsignal (self, sweep_idx):
         return self.signals['sweep_signal'][sweep_idx]
 
-class izmap:  # dIdV, I-z spec, apparent barrier map
+class point_iz:
     def __init__(self, instance, sweep_direction='fwd'):
         self.fname = instance.fname
         self.header = instance.header
         self.signals = instance.signals
         self.sweep_dir = sweep_direction
-        
+
     def get_channel_name(self, base_channel, include_avg=False, bwd=None):
         """
         Parameters:
@@ -427,19 +361,45 @@ class izmap:  # dIdV, I-z spec, apparent barrier map
             channel_name = f"{channel_base} (A)"
             
         return channel_name
-
+    
     def has_averaged_data(self):
         """
         Checks if the dataset contains averaged signals.
         """
         return 'Current [AVG] (A)' in self.signals.keys()
+
+    def get_iz_raw(self, line, pixel):
+        """
+        Returns
+        -------
+        tuple
+            (Z (m), Current (A))
+        """        
+        channel_name = self.get_channel_name('Current', include_avg=self.has_averaged_data())
+        return self.signals['sweep_signal'], self.signals[channel_name][line, pixel]
+
+    def get_apparent_barrier_height(self, line, pixel, fitting_current_range=(1e-12, 10e-12)):
+        def linear(x, barr, b):
+            return -2*(np.sqrt(2*0.51099895e+6*barr)/(6.582119569e-16*2.99792458e+8))*x + b
         
-    # def get_didvmap(self, sweep_idx, channel='LI Demod 1 X (A)'):
-    #     channel_name = self.get_channel_name(channel, include_avg=self.has_averaged_data())
-    #     didv = self.signals[channel_name][:, :, sweep_idx]
-    #     return didv
+        z = self.signals['sweep_signal']
+        if self.sweep_dir == 'AVG':
+            fwd_current = self.signals[self.get_channel_name('Current', include_avg=self.has_averaged_data())][line, pixel]
+            bwd_current = self.signals[self.get_channel_name('Current', include_avg=self.has_averaged_data(), bwd=True)][line, pixel]
+            I = np.abs(np.nanmean([fwd_current, bwd_current], axis=0))
+        else:
+            channel_name = self.get_channel_name('Current', include_avg=self.has_averaged_data())
+            I = np.abs(self.signals[channel_name][line, pixel])
+
+        idx = np.where((fitting_current_range[0] <= I) & (I <= fitting_current_range[1]))
+        popt, pcov = curve_fit(linear, z[idx], np.log(I[idx]), p0=[5.5, 1.2])
+        return popt[0]  # apparent_barrier_height
+
+class izmap(point_iz):  # I-z spec, apparent barrier map
+    def __init__(self, instance, sweep_direction='fwd'):
+        super().__init__(instance, sweep_direction)
     
-    def get_currentmap(self, sweep_idx):
+    def get_izmap(self, sweep_idx):
         if self.sweep_dir == 'AVG':
             fwd_current = self.signals[self.get_channel_name('Current', include_avg=False)][:, :, sweep_idx]
             bwd_current = self.signals[self.get_channel_name('Current', include_avg=False, bwd=True)][:, :, sweep_idx]
@@ -449,39 +409,31 @@ class izmap:  # dIdV, I-z spec, apparent barrier map
                                                         include_avg=self.has_averaged_data())][:, :, sweep_idx]
         return current
 
-    def get_apparent_barrier_height(self, line, pixel, fitting_current_range=(1e-12, 10e-12)):
-        def linear(x, barr, b):
-            return -2*(np.sqrt(2*0.51099895e+6*barr)/(6.582119569e-16*2.99792458e+8))*x + b
-        
-        z = self.signals['sweep_signal']
-        if self.sweep_dir == 'AVG':
-            fwd_current = self.signals[self.get_channel_name('Current', include_avg=False)][line, pixel]
-            bwd_current = self.signals[self.get_channel_name('Current', include_avg=False, bwd=True)][line, pixel]
-            I = np.abs(np.nanmean([fwd_current, bwd_current], axis=0))
-        else:
-            channel_name = self.get_channel_name('Current', include_avg=self.has_averaged_data())
-            I = np.abs(self.signals[channel_name][line, pixel])
-
-        idx = np.where((fitting_current_range[0] <= I) & (I <= fitting_current_range[1]))
-        popt, pcov = curve_fit(linear, z[idx], np.log(I[idx]), p0=[5.5, 1.2])
-        apparent_barrier_height = popt[0]
-        err = np.sqrt(np.diag(pcov))[0]
-
-        return apparent_barrier_height, err
+    # def get_currentmap(self, sweep_idx):
+    #     if self.sweep_dir == 'AVG':
+    #         fwd_current = self.signals[self.get_channel_name('Current', include_avg=False)][:, :, sweep_idx]
+    #         bwd_current = self.signals[self.get_channel_name('Current', include_avg=False, bwd=True)][:, :, sweep_idx]
+    #         current = np.nanmean([fwd_current, bwd_current], axis=0)
+    #     else:
+    #         current = self.signals[self.get_channel_name('Current', 
+    #                                                     include_avg=self.has_averaged_data())][:, :, sweep_idx]
+    #     return current
     
     def get_apparent_barrier_height_map(self, fitting_current_range=(1e-12, 10e-12)):
         lines, pixels = self.header['dim_px'][1], self.header['dim_px'][0]
         arr = np.zeros((lines, pixels))
-        err = np.zeros((lines, pixels))
+        # err = np.zeros((lines, pixels))
         for i in range(lines):
             for j in range(pixels):
                 try:
-                    arr[i, j], err[i, j] = self.get_apparent_barrier_height(i, j, fitting_current_range)
+                    # arr[i, j], err[i, j] = self.get_apparent_barrier_height(i, j, fitting_current_range)
+                    arr[i, j] = self.get_apparent_barrier_height(i, j, fitting_current_range)
                 except Exception as e:
                     print(f'Estimation error at: {i, j}. {str(e)}')
                     arr[i, j] = np.nan
-                    err[i, j] = np.nan
-        return arr, err
+                    # err[i, j] = np.nan
+        # return arr, err
+        return arr
     
     def get_sweepsignal (self, sweep_idx):
         return self.signals['sweep_signal'][sweep_idx]
