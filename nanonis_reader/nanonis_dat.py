@@ -7,6 +7,9 @@ try:
 except:
     from scipy.integrate import cumulative_trapezoid as cumtrapz # scipy new version (after 1.14.0)
 
+import warnings
+warnings.warn("The nanonis_dat module is deprecated. Please use dat.py instead.", DeprecationWarning, stacklevel=2)
+
 
 # Only forward sweeps can be plotted right now. Need to add codes for backward.
 class Load:

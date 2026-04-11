@@ -42,69 +42,102 @@ class topography:
         return z
     
     def subtract_average (self):
-        warnings.filterwarnings(action='ignore')
         z = self.raw()
-        z_subav = np.zeros(np.shape(z))
-        lines = np.shape(z)[0]
-        for i in range(lines):
-            z_subav[i] = z[i] - np.nanmean(z[i])
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            z_subav = z - np.nanmean(z, axis=1, keepdims=True)
         return z_subav
 
-    def subtract_linear_fit(self):
+    def subtract_linear_fit(self):        
         z = self.raw()
         lines, pixels = np.shape(z)
         x = np.arange(pixels)
         
-        # nan이 있는 행 찾기
-        nan_rows = np.isnan(z).any(axis=1)
+        nan_rows = np.isnan(z).all(axis=1) # 전부 NaN인 행
+        partial_rows = np.isnan(z).any(axis=1) & ~nan_rows # 일부만 NaN인 행 (스캔 도중 멈춘 라인)
+        valid_rows = ~np.isnan(z).any(axis=1) # 완벽한 행
         
-        # 결과 배열 초기화 (nan으로)
         z_sublf = np.full_like(z, np.nan)
         
-        # nan이 없는 행들에 대해 처리
-        valid_rows = ~nan_rows
-        valid_z = z[valid_rows]
-        
-        # 한번에 모든 유효한 행에 대해 선형 피팅
-        coeffs = np.polyfit(x, valid_z.T, 1)
-        fitted = (coeffs[0].reshape(-1,1) * x + coeffs[1].reshape(-1,1))
-        
-        # 결과 저장
-        z_sublf[valid_rows] = valid_z - fitted
-        
+        if np.any(valid_rows):
+            valid_z = z[valid_rows]
+            coeffs = np.polyfit(x, valid_z.T, 1)
+            fitted = (coeffs[0].reshape(-1,1) * x + coeffs[1].reshape(-1,1))
+            z_sublf[valid_rows] = valid_z - fitted
+            
+        for i in np.where(partial_rows)[0]:
+            valid_idx = ~np.isnan(z[i])
+            if np.sum(valid_idx) > 1: # 최소 2점 필요
+                popt = np.polyfit(x[valid_idx], z[i][valid_idx], 1)
+                fitted = popt[0]*x + popt[1]
+                z_sublf[i] = z[i] - fitted
+                
         return z_sublf
 
-    def subtract_parabolic_fit (self):
-        def f_parab(x, a, b, c): return a*(x**2) + b*x + c
-        xrange = round(self.header['size_xy'][0] * 1e9)*1e-9
-        print (xrange)
-        z = self.raw()
-        z_subpf = np.zeros(np.shape(z))
-        lines, pixels = np.shape(z)
-        for i in range(lines):
-            if np.shape(np.where(np.isnan(z))[0])[0] != 0: # image에 nan값이 포함되어 있을 경우 (== scan을 도중에 멈추었을 경우)
-                if i < np.min(np.where(np.isnan(z))[0]):
-                    x = np.linspace(0, xrange, pixels)
-                    popt, pcov = curve_fit(f_parab, x, z[i])
-                    z_subpf[i] = z[i] - f_parab(x, *popt)
-                else:
-                    z_subpf[i] = np.nan
-            else:
-                x = np.linspace(0, xrange, pixels)
-                popt, pcov = curve_fit(f_parab, x, z[i]) # x - ith line: linear fitting
-                z_subpf[i] = z[i] - f_parab(x, *popt)
+    # def subtract_parabolic_fit (self):
+    #     def f_parab(x, a, b, c): return a*(x**2) + b*x + c
+    #     xrange = round(self.header['size_xy'][0] * 1e9)*1e-9
+    #     print (xrange)
+    #     z = self.raw()
+    #     z_subpf = np.zeros(np.shape(z))
+    #     lines, pixels = np.shape(z)
+    #     for i in range(lines):
+    #         if np.shape(np.where(np.isnan(z))[0])[0] != 0: # image에 nan값이 포함되어 있을 경우 (== scan을 도중에 멈추었을 경우)
+    #             if i < np.min(np.where(np.isnan(z))[0]):
+    #                 x = np.linspace(0, xrange, pixels)
+    #                 popt, pcov = curve_fit(f_parab, x, z[i])
+    #                 z_subpf[i] = z[i] - f_parab(x, *popt)
+    #             else:
+    #                 z_subpf[i] = np.nan
+    #         else:
+    #             x = np.linspace(0, xrange, pixels)
+    #             popt, pcov = curve_fit(f_parab, x, z[i]) # x - ith line: linear fitting
+    #             z_subpf[i] = z[i] - f_parab(x, *popt)
+    #     return z_subpf
 
+    def subtract_parabolic_fit(self):        
+        z = self.raw()
+        lines, pixels = np.shape(z)
+        x = np.arange(pixels)
+        
+        nan_rows = np.isnan(z).all(axis=1)
+        partial_rows = np.isnan(z).any(axis=1) & ~nan_rows
+        valid_rows = ~np.isnan(z).any(axis=1)
+        
+        z_subpf = np.full_like(z, np.nan)
+        
+        if np.any(valid_rows):
+            valid_z = z[valid_rows]
+            coeffs = np.polyfit(x, valid_z.T, 2)
+            fitted = (coeffs[0].reshape(-1,1) * (x**2) + coeffs[1].reshape(-1,1) * x + coeffs[2].reshape(-1,1))
+            z_subpf[valid_rows] = valid_z - fitted
+            
+        for i in np.where(partial_rows)[0]:
+            valid_idx = ~np.isnan(z[i])
+            if np.sum(valid_idx) > 2: # 최소 3점 필요
+                popt = np.polyfit(x[valid_idx], z[i][valid_idx], 2)
+                fitted = popt[0]*(x**2) + popt[1]*x + popt[2]
+                z_subpf[i] = z[i] - fitted
+                
         return z_subpf
     
-    def differentiate (self):
-        xrange, pixels = round(self.header['size_xy'][0] * 1e9)*1e-9, int(self.header['dim_px'][0])
+    # def differentiate (self):
+    #     xrange, pixels = round(self.header['size_xy'][0] * 1e9)*1e-9, int(self.header['dim_px'][0])
+    #     dx = xrange / pixels
+    #     z = self.raw()
+    #     z_deriv = np.zeros(np.shape(z))
+    #     lines = np.shape(z)[0]
+    #     for i in range(lines):
+    #         z_deriv[i] = np.gradient(z[i], dx, edge_order = 2) # dI/dV curve를 직접 미분. --> d^2I/dV^2
+    #     return z_deriv
+
+    def differentiate(self):
+        xrange = round(self.header['size_xy'][0] * 1e9) * 1e-9
+        pixels = int(self.header['dim_px'][0])
         dx = xrange / pixels
-        z = self.raw()
-        z_deriv = np.zeros(np.shape(z))
-        lines = np.shape(z)[0]
-        for i in range(lines):
-            z_deriv[i] = np.gradient(z[i], dx, edge_order = 2) # dI/dV curve를 직접 미분. --> d^2I/dV^2
         
+        # 2D gradient operation
+        z_deriv = np.gradient(self.raw(), dx, axis=1, edge_order=2)
         return z_deriv
 
 
@@ -288,33 +321,77 @@ class didvmap(point_didv):  # dIdV
 
     def scaled(self, sweep_idx, channel='LI Demod 1 X', offset='none'):
         """Get scaled dI/dV map at a specific sweep index."""
-        lines, pixels = self.header['dim_px'][1], self.header['dim_px'][0]
-        didv_map = np.zeros((lines, pixels))
-        for i in range(lines):
-            for j in range(pixels):
-                didv_spectrum = self.get_didv_scaled(i, j, channel, offset)[1]
-                didv_map[i, j] = didv_spectrum[sweep_idx]
+        channel_name = self.get_channel_name(channel, include_avg=self.has_averaged_data())
+        didv_raw = np.copy(self.signals[channel_name])
+        if offset != 'none':
+            didv_raw = didv_raw - offset
+            
+        step = self.signals['sweep_signal'][1] - self.signals['sweep_signal'][0]
+        current_channel = self.get_channel_name('Current', include_avg=self.has_averaged_data())
+        
+        # Calculate numerical derivatives and scale factor across the entire 3D grid
+        didv_numerical = np.gradient(self.signals[current_channel], step, axis=2, edge_order=2)
+        scale_factors = np.nanmedian(didv_numerical / didv_raw, axis=2)
+        
+        didv_map = scale_factors * didv_raw[:, :, sweep_idx]
         return didv_map
 
     def normalized(self, sweep_idx, channel='LI Demod 1 X', factor=0.2, offset='none', delete_zero_bias=True):
-        """Get normalized dI/dV map at a specific sweep index."""
-        lines, pixels = self.header['dim_px'][1], self.header['dim_px'][0]
-        didv_map = np.zeros((lines, pixels))
-        for i in range(lines):
-            for j in range(pixels):
-                didv_normalized = self.get_didv_normalized_rev(i, j, channel, factor, offset, delete_zero_bias)[1]
-                didv_map[i, j] = didv_normalized[sweep_idx]
-        return didv_map
+        """Get normalized dI/dV map at a specific sweep index (Vectorized 3D Volume)."""
+        channel_name = self.get_channel_name(channel, include_avg=self.has_averaged_data())
+        didv_raw = np.copy(self.signals[channel_name])
+        if offset != 'none':
+            didv_raw = didv_raw - offset
+        
+        V = self.signals['sweep_signal']
+        step = V[1] - V[0]
+        current_channel = self.get_channel_name('Current', include_avg=self.has_averaged_data())
+        
+        didv_numerical = np.gradient(self.signals[current_channel], step, axis=2, edge_order=2)
+        
+        # dI/dV Scaled 3D matrix
+        scale_factors = np.nanmedian(didv_numerical / didv_raw, axis=2)[..., np.newaxis]
+        dIdV = scale_factors * didv_raw
+        
+        I_cal = cumtrapz(dIdV, V, initial=0, axis=2)
+            
+        zero = np.argwhere(abs(V) == np.min(abs(V)))[0, 0]
+        
+        # curve_fit linear offset correction on the V=0 near points (3 points) vectorized
+        x = V[zero-1:zero+2]
+        y = I_cal[:, :, zero-1:zero+2]
+        
+        lines, pixels, sweeps = I_cal.shape
+        y_reshaped = y.reshape(lines * pixels, 3).T
+        
+        # NaN 방어 (스캔 도중 중지되어 일부 픽셀에 NaN이 있는 경우 전체 polyfit 연산이 터지는 것 방지)
+        valid_cols = ~np.isnan(y_reshaped).any(axis=0)
+        b_offset = np.full(lines * pixels, np.nan)
+        
+        if np.any(valid_cols):
+            # Fit degree 1: returns shape (2, valid_pixels)
+            popt = np.polyfit(x, y_reshaped[:, valid_cols], 1)
+            b_offset[valid_cols] = popt[1]
+        
+        # popt[1] is the intercept b
+        b_offset = b_offset.reshape(lines, pixels, 1)
+        I_cal = I_cal - b_offset
+        
+        with np.errstate(divide='ignore'):
+            IV_cal = I_cal / V
+            
+        delta = factor * np.nanmedian(IV_cal, axis=2)[..., np.newaxis]
+        Normalized_dIdV = dIdV / np.sqrt(np.square(delta) + np.square(IV_cal))
+        
+        if delete_zero_bias:
+            Normalized_dIdV = np.delete(Normalized_dIdV, zero, axis=2)
+            
+        return Normalized_dIdV[:, :, sweep_idx]
 
     def get_currentmap(self, sweep_idx):
-        """Get current map at a specific sweep index using point_didv.get_iv_raw."""
-        lines, pixels = self.header['dim_px'][1], self.header['dim_px'][0]
-        current_map = np.zeros((lines, pixels))
-        for i in range(lines):
-            for j in range(pixels):
-                current_spectrum = self.get_iv_raw(i, j)[1]
-                current_map[i, j] = current_spectrum[sweep_idx]
-        return current_map
+        """Get current map at a specific sweep index."""
+        current_channel = self.get_channel_name('Current', include_avg=self.has_averaged_data())
+        return self.signals[current_channel][:, :, sweep_idx]
 
     # def get_currentmap(self, sweep_idx):
     #     if self.sweep_dir == 'AVG':

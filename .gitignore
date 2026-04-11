@@ -30,3 +30,13 @@ nanonis_reader/__pycache__/base.cpython-312.pyc
 nanonis_reader/__pycache__/dat.cpython-312.pyc
 nanonis_reader/__pycache__/grid.cpython-312.pyc
 nanonis_reader/__pycache__/sxm.cpython-312.pyc
+
+# Environments and Caches
+.conda/
+.venv/
+__pycache__/
+
+# Ignore markdown artifacts but keep README
+*.md
+!README.md
+updates/

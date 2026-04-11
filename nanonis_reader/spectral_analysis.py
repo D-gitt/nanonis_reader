@@ -1,3 +1,13 @@
+import numpy as np
+from math import factorial
+import numpy as np
+import numpy as np
+import numpy as np
+import numpy as np
+import numpy as np
+import numpy as np
+import numpy as np
+
 def savitzky_golay(y, window_size, order, deriv = 0, rate = 1):
     r"""
     Smooth (and optionally differentiate) data with a Savitzky-Golay filter.
@@ -53,8 +63,6 @@ def savitzky_golay(y, window_size, order, deriv = 0, rate = 1):
        Cambridge University Press ISBN-13: 9780521880688
     """
     
-    import numpy as np
-    from math import factorial
 
     try:
         window_size = np.abs(np.int64(window_size))
@@ -78,24 +86,20 @@ def savitzky_golay(y, window_size, order, deriv = 0, rate = 1):
     return np.convolve( m[::-1], y, mode='valid')
 
 def _1gaussian(x, A, mu, sigma):
-    import numpy as np
     return np.abs(A * ( np.exp((-1.0/2.0)*(((x-mu)/sigma)**2)) ))
 
 def _2gaussian(x, A1, mu1, sigma1, A2, mu2, sigma2):
-    import numpy as np
     f1 = A1 * ( np.exp((-1.0/2.0)*(((x-mu1)/sigma1)**2)) )
     f2 = A2 * ( np.exp((-1.0/2.0)*(((x-mu2)/sigma2)**2)) )
     return np.abs(f1) + np.abs(f2)
 
 def _3gaussian(x, A1, mu1, sigma1, A2, mu2, sigma2, A3, mu3, sigma3):
-    import numpy as np
     f1 = A1 * ( np.exp((-1.0/2.0)*(((x-mu1)/sigma1)**2)) )
     f2 = A2 * ( np.exp((-1.0/2.0)*(((x-mu2)/sigma2)**2)) )
     f3 = A3 * ( np.exp((-1.0/2.0)*(((x-mu3)/sigma3)**2)) )
     return f1 + f2 + f3
 
 def _4gaussian(x, A1, mu1, sigma1, A2, mu2, sigma2, A3, mu3, sigma3, A4, mu4, sigma4):
-    import numpy as np
     f1 = A1 * ( np.exp((-1.0/2.0)*(((x-mu1)/sigma1)**2)) )
     f2 = A2 * ( np.exp((-1.0/2.0)*(((x-mu2)/sigma2)**2)) )
     f3 = A3 * ( np.exp((-1.0/2.0)*(((x-mu3)/sigma3)**2)) )
@@ -103,7 +107,6 @@ def _4gaussian(x, A1, mu1, sigma1, A2, mu2, sigma2, A3, mu3, sigma3, A4, mu4, si
     return f1 + f2 + f3 + f4
 
 def _1gaussian_prob(x, A, mu, sigma): # gaussian function for probability density.
-    import numpy as np
     return A * ( 1/(sigma*(np.sqrt(2*np.pi))) ) * ( np.exp((-1.0/2.0)*(((x-mu)/sigma)**2)) )
     
 # def _2gaussian(x, A1, mu1, sigma1, A2, mu2, sigma2):
@@ -128,7 +131,6 @@ def _1gaussian_prob(x, A, mu, sigma): # gaussian function for probability densit
 #     return f1 + f2 + f3 + f4
 
 def weighted_avg_and_std(values, weights):
-    import numpy as np
     """
     Return the weighted average and standard deviation.
 
@@ -148,5 +150,4 @@ def f_lin_kappa(x, kappa, b):
 
 # linear function for work function estimation.
 def f_lin_wf(x, wf, b):
-    import numpy as np
     return -2 * ( np.sqrt(2 * 0.51099895e+6 * wf) / (6.582119569e-16 * 2.99792458e+8) ) * x + b

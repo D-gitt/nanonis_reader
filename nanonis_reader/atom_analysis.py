@@ -1,6 +1,8 @@
+import numpy as np
+import numpy as np
+
 # Drift correction of STM images obtained on monoclinic Ta2NiSe5.
 def Ta2NiSe5_driftcorr(z, a_image_nm, c_image_nm, scansize_nm, origin_line=0, origin_pixel=0):
-    import numpy as np
     lines, pixels = np.shape(z)
     a, c = 0.34916, 1.565 # lattice constants (nm)
     lines_corr = int(round(lines * (a_image_nm / a)))
@@ -18,7 +20,6 @@ def Ta2NiSe5_driftcorr(z, a_image_nm, c_image_nm, scansize_nm, origin_line=0, or
 
 # Extract topograph from a ASCII XYZ file of WSxM.
 def Extract_Z (Path, Search = 'X[nm]'):
-    import numpy as np
     # Search = 'X[nm]' # X[nm]가 포함된 줄 찾기
     with open(Path, 'r', encoding = 'ISO-8859-1') as f: # encoding='ISO-8859-1'
         for line_number, line in enumerate(f):  # enumerate: 대상의 원소와 index를 묶은 tuple을 반환. / start=1 : index가 1부터 시작. (default==0)

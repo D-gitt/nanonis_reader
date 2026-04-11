@@ -98,12 +98,10 @@ class topography:
         return z
     
     def subtract_average (self, scan_direction):
-        warnings.filterwarnings(action='ignore')
         z = self.raw(scan_direction)
-        z_subav = np.zeros(np.shape(z))
-        lines = np.shape(z)[0]
-        for i in range(lines):
-            z_subav[i] = z[i] - np.nanmean(z[i])
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            z_subav = z - np.nanmean(z, axis=1, keepdims=True)
         return z_subav
 
     # def subtract_linear_fit (self, scan_direction):
@@ -135,23 +133,26 @@ class topography:
         lines, pixels = np.shape(z)
         x = np.arange(pixels)
         
-        # nan이 있는 행 찾기
-        nan_rows = np.isnan(z).any(axis=1)
+        nan_rows = np.isnan(z).all(axis=1) # 전부 NaN인 행
+        partial_rows = np.isnan(z).any(axis=1) & ~nan_rows # 일부만 NaN인 행 (스캔 도중 멈춘 라인)
+        valid_rows = ~np.isnan(z).any(axis=1) # 완벽한 행
         
-        # 결과 배열 초기화 (nan으로)
         z_sublf = np.full_like(z, np.nan)
         
-        # nan이 없는 행들에 대해 처리
-        valid_rows = ~nan_rows
-        valid_z = z[valid_rows]
-        
-        # 한번에 모든 유효한 행에 대해 선형 피팅
-        coeffs = np.polyfit(x, valid_z.T, 1)
-        fitted = (coeffs[0].reshape(-1,1) * x + coeffs[1].reshape(-1,1))
-        
-        # 결과 저장
-        z_sublf[valid_rows] = valid_z - fitted
-        
+        if np.any(valid_rows):
+            valid_z = z[valid_rows]
+            coeffs = np.polyfit(x, valid_z.T, 1)
+            fitted = (coeffs[0].reshape(-1,1) * x + coeffs[1].reshape(-1,1))
+            z_sublf[valid_rows] = valid_z - fitted
+            
+        # 스캔 도중 멈춘 행들에 대한 부분 피팅
+        for i in np.where(partial_rows)[0]:
+            valid_idx = ~np.isnan(z[i])
+            if np.sum(valid_idx) > 1: # 최소 2점 필요
+                popt = np.polyfit(x[valid_idx], z[i][valid_idx], 1)
+                fitted = popt[0]*x + popt[1]
+                z_sublf[i] = z[i] - fitted
+                
         return z_sublf
     
     
@@ -177,52 +178,78 @@ class topography:
     #     return z_sublf.T
 
     def subtract_linear_fit_xy(self, scan_direction):
-        # X 방향 linear fit 제거
+        # X 방향 linear fit 제거된 데이터
         z = self.subtract_linear_fit(scan_direction)
         lines, pixels = np.shape(z)
         
-        # y 방향으로의 linear fit을 위한 x 좌표 (실제 물리적 거리 사용)
         yrange = round(self.header['scan_range'][1] * 1e9)*1e-9
         y = np.linspace(0, yrange, lines)
         
-        # nan이 있는 열 찾기
-        nan_cols = np.isnan(z).any(axis=0)
+        nan_cols = np.isnan(z).all(axis=0)
+        partial_cols = np.isnan(z).any(axis=0) & ~nan_cols
+        valid_cols = ~np.isnan(z).any(axis=0)
         
-        # 결과 배열 초기화 (nan으로)
         z_sublf = np.full_like(z, np.nan)
         
-        # nan이 없는 열들에 대해 처리
-        valid_cols = ~nan_cols
-        valid_z = z[:, valid_cols]
-        
-        # 한번에 모든 유효한 열에 대해 선형 피팅
-        coeffs = np.polyfit(y, valid_z, 1)
-        fitted = (coeffs[0] * y.reshape(-1,1) + coeffs[1])
-        
-        # 결과 저장
-        z_sublf[:, valid_cols] = valid_z - fitted
-        
+        if np.any(valid_cols):
+            valid_z = z[:, valid_cols]
+            coeffs = np.polyfit(y, valid_z, 1)
+            fitted = (coeffs[0] * y.reshape(-1,1) + coeffs[1])
+            z_sublf[:, valid_cols] = valid_z - fitted
+            
+        for j in np.where(partial_cols)[0]:
+            valid_idx = ~np.isnan(z[:, j])
+            if np.sum(valid_idx) > 1:
+                popt = np.polyfit(y[valid_idx], z[valid_idx, j], 1)
+                fitted = popt[0]*y + popt[1]
+                z_sublf[:, j] = z[:, j] - fitted
+                
         return z_sublf
 
-    def subtract_parabolic_fit (self, scan_direction):
-        def f_parab(x, a, b, c): return a*(x**2) + b*x + c
-        xrange = round(self.header['scan_range'][0] * 1e9)*1e-9
-        z = self.raw(scan_direction)
-        z_subpf = np.zeros(np.shape(z))
-        lines, pixels = np.shape(z)
-        for i in range(lines):
-            if np.shape(np.where(np.isnan(z))[0])[0] != 0: # image에 nan값이 포함되어 있을 경우 (== scan을 도중에 멈추었을 경우)
-                if i < np.min(np.where(np.isnan(z))[0]):
-                    x = np.linspace(0, xrange, pixels)
-                    popt, pcov = curve_fit(f_parab, x, z[i])
-                    z_subpf[i] = z[i] - f_parab(x, *popt)
-                else:
-                    z_subpf[i] = np.nan
-            else:
-                x = np.linspace(0, xrange, pixels)
-                popt, pcov = curve_fit(f_parab, x, z[i]) # x - ith line: linear fitting
-                z_subpf[i] = z[i] - f_parab(x, *popt)
+    # def subtract_parabolic_fit (self, scan_direction):
+    #     def f_parab(x, a, b, c): return a*(x**2) + b*x + c
+    #     xrange = round(self.header['scan_range'][0] * 1e9)*1e-9
+    #     z = self.raw(scan_direction)
+    #     z_subpf = np.zeros(np.shape(z))
+    #     lines, pixels = np.shape(z)
+    #     for i in range(lines):
+    #         if np.shape(np.where(np.isnan(z))[0])[0] != 0: # image에 nan값이 포함되어 있을 경우 (== scan을 도중에 멈추었을 경우)
+    #             if i < np.min(np.where(np.isnan(z))[0]):
+    #                 x = np.linspace(0, xrange, pixels)
+    #                 popt, pcov = curve_fit(f_parab, x, z[i])
+    #                 z_subpf[i] = z[i] - f_parab(x, *popt)
+    #             else:
+    #                 z_subpf[i] = np.nan
+    #         else:
+    #             x = np.linspace(0, xrange, pixels)
+    #             popt, pcov = curve_fit(f_parab, x, z[i]) # x - ith line: linear fitting
+    #             z_subpf[i] = z[i] - f_parab(x, *popt)
+    #     return z_subpf
 
+    def subtract_parabolic_fit(self, scan_direction):        
+        z = self.raw(scan_direction)
+        lines, pixels = np.shape(z)
+        x = np.arange(pixels)
+        
+        nan_rows = np.isnan(z).all(axis=1) # 전부 NaN인 행
+        partial_rows = np.isnan(z).any(axis=1) & ~nan_rows # 일부만 NaN인 바닥 행
+        valid_rows = ~np.isnan(z).any(axis=1) # 온전한 행
+        
+        z_subpf = np.full_like(z, np.nan)
+        
+        if np.any(valid_rows):
+            valid_z = z[valid_rows]
+            coeffs = np.polyfit(x, valid_z.T, 2)
+            fitted = (coeffs[0].reshape(-1,1) * (x**2) + coeffs[1].reshape(-1,1) * x + coeffs[2].reshape(-1,1))
+            z_subpf[valid_rows] = valid_z - fitted
+            
+        for i in np.where(partial_rows)[0]:
+            valid_idx = ~np.isnan(z[i])
+            if np.sum(valid_idx) > 2: # 최소 3점 필요
+                popt = np.polyfit(x[valid_idx], z[i][valid_idx], 2)
+                fitted = popt[0]*(x**2) + popt[1]*x + popt[2]
+                z_subpf[i] = z[i] - fitted
+                
         return z_subpf
     
     # def differentiate (self, scan_direction):

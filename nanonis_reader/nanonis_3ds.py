@@ -9,6 +9,8 @@ try:
 except:
     from scipy.integrate import cumulative_trapezoid
 
+warnings.warn("The nanonis_3ds module is deprecated. Please use grid.py instead.", DeprecationWarning, stacklevel=2)
+
 
 class Load:
     def __init__(self, filepath):

@@ -1,5 +1,8 @@
+import numpy as np
+import numpy as np
+from scipy.interpolate import UnivariateSpline
+
 def band_EI (x, Ec, Ev, sign = '+', delta = 100): # delta: order parameter
-    import numpy as np
     Erec = (Ec + Ev + np.sqrt ( (Ec - Ev)**2 + 4*(delta**2) )) / 2
     Erev = (Ec + Ev - np.sqrt ( (Ec - Ev)**2 + 4*(delta**2) )) / 2
     if sign == '+':
@@ -8,8 +11,6 @@ def band_EI (x, Ec, Ev, sign = '+', delta = 100): # delta: order parameter
         return Erev
 
 def DOS (band, E, thermal):
-    import numpy as np
-    from scipy.interpolate import UnivariateSpline # interpolation을 통해 해 찾기. raw input은 discrete 해서 오차 생김.
     dos = np.zeros(len(E))
     dE = E[1]-E[0]
     for i, energy in enumerate(E):

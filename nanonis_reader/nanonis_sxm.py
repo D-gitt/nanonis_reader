@@ -5,6 +5,8 @@ import numpy as np
 from scipy.optimize import curve_fit
 from scipy.linalg import lstsq
 
+warnings.warn("The nanonis_sxm module is deprecated. Please use sxm.py instead.", DeprecationWarning, stacklevel=2)
+
 
 class Load:
     def __init__(self, filepath):
