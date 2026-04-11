@@ -1,12 +1,5 @@
 import numpy as np
 from math import factorial
-import numpy as np
-import numpy as np
-import numpy as np
-import numpy as np
-import numpy as np
-import numpy as np
-import numpy as np
 
 def savitzky_golay(y, window_size, order, deriv = 0, rate = 1):
     r"""

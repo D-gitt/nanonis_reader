@@ -1,5 +1,4 @@
 import numpy as np
-import numpy as np
 
 # Drift correction of STM images obtained on monoclinic Ta2NiSe5.
 def Ta2NiSe5_driftcorr(z, a_image_nm, c_image_nm, scansize_nm, origin_line=0, origin_pixel=0):

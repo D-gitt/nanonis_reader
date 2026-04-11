@@ -1,5 +1,4 @@
 import numpy as np
-import numpy as np
 
 def barrier_height (kappa): # Input: kappa in 1/m unit.
     m_eV = 0.51099895e+6 # Electron mass in eV unit. (NOT eV/c^2 unit. Use m_e instead of m_e*c**2.)

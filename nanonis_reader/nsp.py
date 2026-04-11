@@ -127,3 +127,21 @@ class Nsp:
             
         data_dict[signal_name] = specdata
         return data_dict
+
+class ltspec:
+    """
+    Data extractor for nsp files.
+    """
+    def __init__(self, instance):
+        self.fname = instance.fname
+        self.header = instance.header
+        self.signals = instance.signals
+        
+    def get(self):
+        """
+        Returns the data array transposed, using the first available signal.
+        """
+        if not self.signals:
+            raise ValueError(f"No signals found in {self.fname}")
+        first_key = list(self.signals.keys())[0]
+        return self.signals[first_key].T

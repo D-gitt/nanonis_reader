@@ -1,5 +1,4 @@
 import numpy as np
-import numpy as np
 from scipy.interpolate import UnivariateSpline
 
 def band_EI (x, Ec, Ev, sign = '+', delta = 100): # delta: order parameter
