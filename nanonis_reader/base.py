@@ -1,5 +1,6 @@
 import os
 import nanonispy as nap
+from . import nsp
 
 class load:
     """Base class for handling all Nanonis data files."""
@@ -7,7 +8,8 @@ class load:
     EXTENSION_READERS = {
         'sxm': nap.read.Scan,
         'dat': nap.read.Spec,
-        '3ds': nap.read.Grid
+        '3ds': nap.read.Grid,
+        'nsp': nsp.Nsp
     }
     
     def __init__(self, filepath):
