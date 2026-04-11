@@ -50,24 +50,22 @@ class Nsp:
         Finds the byte offset marking the end of the ASCII header section.
         """
         with open(self.fname, 'rb') as f:
-            chunk_size = 1024
-            offset = 0
-            tag_bytes = tag.encode('utf-8')
-            tag_len = len(tag_bytes)
+            byte_offset = -1
             
-            while True:
-                f.seek(offset)
-                data = f.read(chunk_size + tag_len)
-                
-                if not data:
+            for line in f:
+                # Convert from bytes to str
+                try:
+                    entry = line.strip().decode()
+                except UnicodeDecodeError:
+                    entry = line.strip().decode('utf-8', errors='replace')
+                if tag in entry:
+                    byte_offset = f.tell()
                     break
-                
-                pos = data.find(tag_bytes)
-                if pos != -1:
-                    return offset + pos + tag_len
-                
-                offset += chunk_size
-        return 0
+            
+            if byte_offset == -1:
+                return 0
+        
+        return byte_offset
 
     def _read_raw_header(self, byte_offset):
         """
