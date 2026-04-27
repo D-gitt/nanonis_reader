@@ -200,6 +200,64 @@ class point_didv:
                 np.median(self.get_didv_numerical(line, pixel)[1]/self.get_didv_raw(line, pixel, channel, offset)[1])\
                 *self.get_didv_raw(line, pixel, channel, offset)[1]
     
+    # def get_didv_normalized(self, line, pixel, channel='LI Demod 1 X', factor=0.2, offset='none', delete_zero_bias=True):
+    #     """
+    #     Returns
+    #     -------
+    #     tuple
+    #         (Bias (V), normalized dIdV)
+    #     """
+    #     V, dIdV = self.get_didv_scaled(line, pixel, channel, offset='none')
+    #     I_cal = cumtrapz(dIdV, V, initial=0)
+    # 
+    #     zero = np.argwhere(abs(V) == np.min(abs(V)))[0, 0]
+    #     popt, pcov = curve_fit(lambda x, a, b: a*x + b, V[zero-1:zero+2], I_cal[zero-1:zero+2])
+    #     I_cal -= popt[1]
+    # 
+    #     with np.errstate(divide='ignore'):
+    #         IV_cal = I_cal/V
+    # 
+    #     delta = factor*np.nanmedian(IV_cal)
+    #     Normalized_dIdV = dIdV / np.sqrt(np.square(delta) + np.square(IV_cal))
+    #     
+    #     if delete_zero_bias:
+    #         return np.delete(V, zero), np.delete(Normalized_dIdV, zero)
+    #     return V, Normalized_dIdV
+    # 
+    # def get_didv_normalized_rev(self, line, pixel, channel='LI Demod 1 X', factor=0.2, offset='none', delete_zero_bias=True):
+    #     """
+    #     Returns
+    #     -------
+    #     tuple
+    #         (Bias (V), normalized dIdV)
+    #     """
+    #     V, dIdV = self.get_didv_scaled(line, pixel, channel, offset='none')
+    #     I_cal = cumtrapz(dIdV, V, initial=0)
+    # 
+    #     zero = np.argwhere(abs(V) == np.min(abs(V)))[0, 0]
+    # 
+    #     with np.errstate(divide='ignore'): # Ignore the warning of zero division.
+    #         if V[zero] == 0: # The case V has 0 as an element.
+    #             I_cal -= I_cal[zero]  # Offset for I(V=0) = 0
+    #             IV_cal = I_cal/V
+    #             
+    #             # linear interpolation for I/V at 0 V: y = mx + b
+    #             m = (IV_cal[zero+1] - IV_cal[zero-1]) / (V[zero+1] - V[zero-1])
+    #             b = IV_cal[zero+1] - m * V[zero+1]
+    #             IV_cal[zero] = b
+    #         else:
+    #             popt, _ = curve_fit(lambda x, a, b: a*x + b, V[zero-1:zero+2], I_cal[zero-1:zero+2])
+    #             I_cal -= popt[1]
+    #             IV_cal = I_cal/V
+    #     
+    #     delta = factor*np.nanmedian(IV_cal)
+    #     Normalized_dIdV = dIdV / np.sqrt(np.square(delta) + np.square(IV_cal))
+    #     
+    #     if delete_zero_bias:
+    #         return np.delete(V, zero), np.delete(Normalized_dIdV, zero)
+    #     else:
+    #         return V, Normalized_dIdV
+
     def get_didv_normalized(self, line, pixel, channel='LI Demod 1 X', factor=0.2, offset='none', delete_zero_bias=True):
         """
         Returns
@@ -207,49 +265,20 @@ class point_didv:
         tuple
             (Bias (V), normalized dIdV)
         """
-        V, dIdV = self.get_didv_scaled(line, pixel, channel, offset='none')
+        V, dIdV = self.get_didv_scaled(line, pixel, channel, offset=offset)
         I_cal = cumtrapz(dIdV, V, initial=0)
 
         zero = np.argwhere(abs(V) == np.min(abs(V)))[0, 0]
-        popt, pcov = curve_fit(lambda x, a, b: a*x + b, V[zero-1:zero+2], I_cal[zero-1:zero+2])
+        popt, _ = curve_fit(lambda x, a, b: a*x + b, V[zero-1:zero+2], I_cal[zero-1:zero+2])
         I_cal -= popt[1]
 
-        with np.errstate(divide='ignore'):
+        with np.errstate(divide='ignore', invalid='ignore'):
             IV_cal = I_cal/V
+            
+            # 극한값(로피탈의 정리)에 의해 V->0 일 때 I/V = dI/dV 이며, 이는 피팅된 직선의 기울기(popt[0])와 같습니다.
+            if abs(V[zero]) < 1e-5:
+                IV_cal[zero] = popt[0]
 
-        delta = factor*np.nanmedian(IV_cal)
-        Normalized_dIdV = dIdV / np.sqrt(np.square(delta) + np.square(IV_cal))
-        
-        if delete_zero_bias:
-            return np.delete(V, zero), np.delete(Normalized_dIdV, zero)
-        return V, Normalized_dIdV
-
-    def get_didv_normalized_rev(self, line, pixel, channel='LI Demod 1 X', factor=0.2, offset='none', delete_zero_bias=True):
-        """
-        Returns
-        -------
-        tuple
-            (Bias (V), normalized dIdV)
-        """
-        V, dIdV = self.get_didv_scaled(line, pixel, channel, offset='none')
-        I_cal = cumtrapz(dIdV, V, initial=0)
-
-        zero = np.argwhere(abs(V) == np.min(abs(V)))[0, 0]
-
-        with np.errstate(divide='ignore'): # Ignore the warning of zero division.
-            if V[zero] == 0: # The case V has 0 as an element.
-                I_cal -= I_cal[zero]  # Offset for I(V=0) = 0
-                IV_cal = I_cal/V
-                
-                # linear interpolation for I/V at 0 V: y = mx + b
-                m = (IV_cal[zero+1] - IV_cal[zero-1]) / (V[zero+1] - V[zero-1])
-                b = IV_cal[zero+1] - m * V[zero+1]
-                IV_cal[zero] = b
-            else:
-                popt, _ = curve_fit(lambda x, a, b: a*x + b, V[zero-1:zero+2], I_cal[zero-1:zero+2])
-                I_cal -= popt[1]
-                IV_cal = I_cal/V
-        
         delta = factor*np.nanmedian(IV_cal)
         Normalized_dIdV = dIdV / np.sqrt(np.square(delta) + np.square(IV_cal))
         
@@ -790,60 +819,89 @@ class line_spectrum: # any spectrum (dIdV, Z, I, ...) vs sweep_signal at any poi
         np.median(self.get_didv_numerical(line, pixel)[1]/self.get_didv_raw(line, pixel, channel, offset)[1])\
         *self.get_didv_raw(line, pixel, channel, offset)[1]
     
-    def get_didv_normalized (self, line, pixel, channel='LI Demod 1 X (A)', factor=0.2, offset='none', delete_zero_bias=True):
+    # def get_didv_normalized (self, line, pixel, channel='LI Demod 1 X (A)', factor=0.2, offset='none', delete_zero_bias=True):
+    #     """
+    #     Returns
+    #     -------
+    #     tuple
+    #         (Bias (V), normalized dIdV)
+    #     """
+    #     # dIdV, V = self.get_didv_scaled(line, pixel, channel)[1], self.signals['sweep_signal']
+    #     V, dIdV = self.get_didv_scaled(line, pixel, channel, offset = 'none')
+    #     I_cal = cumtrapz(dIdV, V, initial=0)
+    # 
+    #     zero = np.argwhere ( abs(V) == np.min(abs(V)) )[0, 0] # The index where V = 0 or nearest to 0.
+    #     popt, pcov = curve_fit (lambda x, a, b: a*x + b, V[zero-1:zero+2], I_cal[zero-1:zero+2])
+    #     I_cal -= popt[1]
+    # 
+    #     # get total conductance I/V
+    #     with np.errstate(divide='ignore'): # Ignore the warning of 'division by zero'.
+    #         IV_cal = I_cal/V
+    # 
+    #     # I_cal/V = 0/0으로 계산되는 경우
+    #     # nan으로 처리됨. 이 값 제외를 위해 nanmedian 사용.
+    #     delta = factor*np.nanmedian(IV_cal)
+    #     Normalized_dIdV = dIdV / np.sqrt(np.square(delta) + np.square(IV_cal))
+    #     if delete_zero_bias == False:
+    #         return V, Normalized_dIdV
+    #     else:
+    #         return np.delete(V, zero), np.delete(Normalized_dIdV, zero)
+    # 
+    # def get_didv_normalized_rev(self, line, pixel, channel='LI Demod 1 X', factor=0.2, offset='none', delete_zero_bias=True):
+    #     """
+    #     Returns
+    #     -------
+    #     tuple
+    #         (Bias (V), normalized dIdV)
+    #     """
+    #     V, dIdV = self.get_didv_scaled(line, pixel, channel, offset='none')
+    #     I_cal = cumtrapz(dIdV, V, initial=0)
+    # 
+    #     zero = np.argwhere(abs(V) == np.min(abs(V)))[0, 0]
+    # 
+    #     with np.errstate(divide='ignore'): # Ignore the warning of zero division.
+    #         if V[zero] == 0: # The case V has 0 as an element.
+    #             I_cal -= I_cal[zero]  # Offset for I(V=0) = 0
+    #             IV_cal = I_cal/V
+    #             
+    #             # linear interpolation for I/V at 0 V: y = mx + b
+    #             m = (IV_cal[zero+1] - IV_cal[zero-1]) / (V[zero+1] - V[zero-1])
+    #             b = IV_cal[zero+1] - m * V[zero+1]
+    #             IV_cal[zero] = b
+    #         else:
+    #             popt, _ = curve_fit(lambda x, a, b: a*x + b, V[zero-1:zero+2], I_cal[zero-1:zero+2])
+    #             I_cal -= popt[1]
+    #             IV_cal = I_cal/V
+    #     
+    #     delta = factor*np.nanmedian(IV_cal)
+    #     Normalized_dIdV = dIdV / np.sqrt(np.square(delta) + np.square(IV_cal))
+    #     
+    #     if delete_zero_bias:
+    #         return np.delete(V, zero), np.delete(Normalized_dIdV, zero)
+    #     else:
+    #         return V, Normalized_dIdV
+
+    def get_didv_normalized(self, line, pixel, channel='LI Demod 1 X (A)', factor=0.2, offset='none', delete_zero_bias=True):
         """
         Returns
         -------
         tuple
             (Bias (V), normalized dIdV)
         """
-        # dIdV, V = self.get_didv_scaled(line, pixel, channel)[1], self.signals['sweep_signal']
-        V, dIdV = self.get_didv_scaled(line, pixel, channel, offset = 'none')
-        I_cal = cumtrapz(dIdV, V, initial=0)
-
-        zero = np.argwhere ( abs(V) == np.min(abs(V)) )[0, 0] # The index where V = 0 or nearest to 0.
-        popt, pcov = curve_fit (lambda x, a, b: a*x + b, V[zero-1:zero+2], I_cal[zero-1:zero+2])
-        I_cal -= popt[1]
-
-        # get total conductance I/V
-        with np.errstate(divide='ignore'): # Ignore the warning of 'division by zero'.
-            IV_cal = I_cal/V
-
-        # I_cal/V = 0/0으로 계산되는 경우
-        # nan으로 처리됨. 이 값 제외를 위해 nanmedian 사용.
-        delta = factor*np.nanmedian(IV_cal)
-        Normalized_dIdV = dIdV / np.sqrt(np.square(delta) + np.square(IV_cal))
-        if delete_zero_bias == False:
-            return V, Normalized_dIdV
-        else:
-            return np.delete(V, zero), np.delete(Normalized_dIdV, zero)
-
-    def get_didv_normalized_rev(self, line, pixel, channel='LI Demod 1 X', factor=0.2, offset='none', delete_zero_bias=True):
-        """
-        Returns
-        -------
-        tuple
-            (Bias (V), normalized dIdV)
-        """
-        V, dIdV = self.get_didv_scaled(line, pixel, channel, offset='none')
+        V, dIdV = self.get_didv_scaled(line, pixel, channel, offset=offset)
         I_cal = cumtrapz(dIdV, V, initial=0)
 
         zero = np.argwhere(abs(V) == np.min(abs(V)))[0, 0]
+        popt, _ = curve_fit(lambda x, a, b: a*x + b, V[zero-1:zero+2], I_cal[zero-1:zero+2])
+        I_cal -= popt[1]
 
-        with np.errstate(divide='ignore'): # Ignore the warning of zero division.
-            if V[zero] == 0: # The case V has 0 as an element.
-                I_cal -= I_cal[zero]  # Offset for I(V=0) = 0
-                IV_cal = I_cal/V
-                
-                # linear interpolation for I/V at 0 V: y = mx + b
-                m = (IV_cal[zero+1] - IV_cal[zero-1]) / (V[zero+1] - V[zero-1])
-                b = IV_cal[zero+1] - m * V[zero+1]
-                IV_cal[zero] = b
-            else:
-                popt, _ = curve_fit(lambda x, a, b: a*x + b, V[zero-1:zero+2], I_cal[zero-1:zero+2])
-                I_cal -= popt[1]
-                IV_cal = I_cal/V
-        
+        with np.errstate(divide='ignore', invalid='ignore'):
+            IV_cal = I_cal/V
+            
+            # 극한값(로피탈의 정리)에 의해 V->0 일 때 I/V = dI/dV 이며, 이는 피팅된 직선의 기울기(popt[0])와 같습니다.
+            if abs(V[zero]) < 1e-5:
+                IV_cal[zero] = popt[0]
+
         delta = factor*np.nanmedian(IV_cal)
         Normalized_dIdV = dIdV / np.sqrt(np.square(delta) + np.square(IV_cal))
         
