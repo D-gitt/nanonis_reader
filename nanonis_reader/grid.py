@@ -42,37 +42,12 @@ class topography:
         return z
     
     def subtract_average (self):
-        z = self.raw()
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            z_subav = z - np.nanmean(z, axis=1, keepdims=True)
-        return z_subav
+        from . import image_processing as ip
+        return ip.subtract_average(self.raw())
 
     def subtract_linear_fit(self):        
-        z = self.raw()
-        lines, pixels = np.shape(z)
-        x = np.arange(pixels)
-        
-        nan_rows = np.isnan(z).all(axis=1) # 전부 NaN인 행
-        partial_rows = np.isnan(z).any(axis=1) & ~nan_rows # 일부만 NaN인 행 (스캔 도중 멈춘 라인)
-        valid_rows = ~np.isnan(z).any(axis=1) # 완벽한 행
-        
-        z_sublf = np.full_like(z, np.nan)
-        
-        if np.any(valid_rows):
-            valid_z = z[valid_rows]
-            coeffs = np.polyfit(x, valid_z.T, 1)
-            fitted = (coeffs[0].reshape(-1,1) * x + coeffs[1].reshape(-1,1))
-            z_sublf[valid_rows] = valid_z - fitted
-            
-        for i in np.where(partial_rows)[0]:
-            valid_idx = ~np.isnan(z[i])
-            if np.sum(valid_idx) > 1: # 최소 2점 필요
-                popt = np.polyfit(x[valid_idx], z[i][valid_idx], 1)
-                fitted = popt[0]*x + popt[1]
-                z_sublf[i] = z[i] - fitted
-                
-        return z_sublf
+        from . import image_processing as ip
+        return ip.subtract_linear_fit(self.raw())
 
     # def subtract_parabolic_fit (self):
     #     def f_parab(x, a, b, c): return a*(x**2) + b*x + c
@@ -96,30 +71,8 @@ class topography:
     #     return z_subpf
 
     def subtract_parabolic_fit(self):        
-        z = self.raw()
-        lines, pixels = np.shape(z)
-        x = np.arange(pixels)
-        
-        nan_rows = np.isnan(z).all(axis=1)
-        partial_rows = np.isnan(z).any(axis=1) & ~nan_rows
-        valid_rows = ~np.isnan(z).any(axis=1)
-        
-        z_subpf = np.full_like(z, np.nan)
-        
-        if np.any(valid_rows):
-            valid_z = z[valid_rows]
-            coeffs = np.polyfit(x, valid_z.T, 2)
-            fitted = (coeffs[0].reshape(-1,1) * (x**2) + coeffs[1].reshape(-1,1) * x + coeffs[2].reshape(-1,1))
-            z_subpf[valid_rows] = valid_z - fitted
-            
-        for i in np.where(partial_rows)[0]:
-            valid_idx = ~np.isnan(z[i])
-            if np.sum(valid_idx) > 2: # 최소 3점 필요
-                popt = np.polyfit(x[valid_idx], z[i][valid_idx], 2)
-                fitted = popt[0]*(x**2) + popt[1]*x + popt[2]
-                z_subpf[i] = z[i] - fitted
-                
-        return z_subpf
+        from . import image_processing as ip
+        return ip.subtract_parabolic_fit(self.raw())
     
     # def differentiate (self):
     #     xrange, pixels = round(self.header['size_xy'][0] * 1e9)*1e-9, int(self.header['dim_px'][0])
@@ -132,13 +85,11 @@ class topography:
     #     return z_deriv
 
     def differentiate(self):
+        from . import image_processing as ip
         xrange = round(self.header['size_xy'][0] * 1e9) * 1e-9
         pixels = int(self.header['dim_px'][0])
         dx = xrange / pixels
-        
-        # 2D gradient operation
-        z_deriv = np.gradient(self.raw(), dx, axis=1, edge_order=2)
-        return z_deriv
+        return ip.differentiate(self.raw(), dx)
 
 
 class point_didv:
@@ -148,7 +99,7 @@ class point_didv:
         self.signals = instance.signals
         self.sweep_dir = sweep_direction
 
-    def get_channel_name(self, base_channel, include_avg=False, bwd=None):
+    def get_channel_name(self, base_channel, include_avg=False, bwd=None, sweep_direction=None):
         """
         Parameters:
         -----------
@@ -157,14 +108,17 @@ class point_didv:
         include_avg : bool
             Whether to include the [AVG] tag
         bwd : bool or None
-            If True, forces [bwd] tag. If None, uses self.sweep_dir
+            If True, forces [bwd] tag. If None, uses sweep_direction/self.sweep_dir
+        sweep_direction : str or None
+            'fwd' or 'bwd'. If None, uses the instance default (self.sweep_dir).
         """
+        sd = sweep_direction if sweep_direction is not None else self.sweep_dir
         channel_base = base_channel.replace(' (A)', '')
         
         tags = []
         if include_avg:
             tags.append('[AVG]')
-        if bwd or (bwd is None and self.sweep_dir == 'bwd'):
+        if bwd is True or (bwd is None and sd == 'bwd'):
             tags.append('[bwd]')
             
         if tags:
@@ -180,8 +134,8 @@ class point_didv:
         """
         return 'Current [AVG] (A)' in self.signals.keys()
 
-    def get_didv_raw(self, line, pixel, channel='LI Demod 1 X (A)', offset='none'):
-        channel_name = self.get_channel_name(channel, include_avg=self.has_averaged_data())
+    def get_didv_raw(self, line, pixel, channel='LI Demod 1 X (A)', offset='none', sweep_direction=None):
+        channel_name = self.get_channel_name(channel, include_avg=self.has_averaged_data(), sweep_direction=sweep_direction)
         if isinstance(offset, np.ndarray):
             didv = self.signals[channel_name][line, pixel] - offset
         else:
@@ -189,7 +143,7 @@ class point_didv:
             
         return self.signals['sweep_signal'], didv
 
-    def get_didv_scaled(self, line, pixel, channel='LI Demod 1 X', offset='none'):
+    def get_didv_scaled(self, line, pixel, channel='LI Demod 1 X', offset='none', sweep_direction=None):
         """
         Returns
         -------
@@ -197,8 +151,8 @@ class point_didv:
             (Bias (V), dIdV (S))
         """
         return self.signals['sweep_signal'], \
-                np.median(self.get_didv_numerical(line, pixel)[1]/self.get_didv_raw(line, pixel, channel, offset)[1])\
-                *self.get_didv_raw(line, pixel, channel, offset)[1]
+                np.median(self.get_didv_numerical(line, pixel, sweep_direction=sweep_direction)[1]/self.get_didv_raw(line, pixel, channel, offset, sweep_direction=sweep_direction)[1])\
+                *self.get_didv_raw(line, pixel, channel, offset, sweep_direction=sweep_direction)[1]
     
     # def get_didv_normalized(self, line, pixel, channel='LI Demod 1 X', factor=0.2, offset='none', delete_zero_bias=True):
     #     """
@@ -258,14 +212,14 @@ class point_didv:
     #     else:
     #         return V, Normalized_dIdV
 
-    def get_didv_normalized(self, line, pixel, channel='LI Demod 1 X', factor=0.2, offset='none', delete_zero_bias=True):
+    def get_didv_normalized(self, line, pixel, channel='LI Demod 1 X', factor=0.2, offset='none', delete_zero_bias=True, sweep_direction=None):
         """
         Returns
         -------
         tuple
             (Bias (V), normalized dIdV)
         """
-        V, dIdV = self.get_didv_scaled(line, pixel, channel, offset=offset)
+        V, dIdV = self.get_didv_scaled(line, pixel, channel, offset=offset, sweep_direction=sweep_direction)
         I_cal = cumtrapz(dIdV, V, initial=0)
 
         zero = np.argwhere(abs(V) == np.min(abs(V)))[0, 0]
@@ -287,7 +241,7 @@ class point_didv:
         else:
             return V, Normalized_dIdV
 
-    def get_didv_numerical(self, line, pixel):
+    def get_didv_numerical(self, line, pixel, sweep_direction=None):
         """
         Returns
         -------
@@ -295,25 +249,25 @@ class point_didv:
             (Bias (V), numerical dIdV (S))
         """
         step = self.signals['sweep_signal'][1] - self.signals['sweep_signal'][0]
-        current_channel = self.get_channel_name('Current', include_avg=self.has_averaged_data())
+        current_channel = self.get_channel_name('Current', include_avg=self.has_averaged_data(), sweep_direction=sweep_direction)
         didv = np.gradient(self.signals[current_channel][line, pixel], step, edge_order=2)
         return self.signals['sweep_signal'], didv
     
-    def get_iv_raw(self, line, pixel):
+    def get_iv_raw(self, line, pixel, sweep_direction=None):
         """
         Returns
         -------
         tuple
             (Bias (V), Current (A))
         """        
-        current_channel = self.get_channel_name('Current', include_avg=self.has_averaged_data())
+        current_channel = self.get_channel_name('Current', include_avg=self.has_averaged_data(), sweep_direction=sweep_direction)
         return self.signals['sweep_signal'], self.signals[current_channel][line, pixel]
 
 class didvmap(point_didv):  # dIdV
     def __init__(self, instance, sweep_direction='fwd'):
         super().__init__(instance, sweep_direction)
 
-    def get_didvmap(self, sweep_idx, processing='raw', channel='LI Demod 1 X (A)', **kwargs):
+    def get_didvmap(self, sweep_idx, processing='raw', channel='LI Demod 1 X (A)', sweep_direction=None, **kwargs):
         """
         Get dI/dV map at a specific sweep index with various processing options.
 
@@ -325,6 +279,8 @@ class didvmap(point_didv):  # dIdV
             Processing method: 'raw', 'scaled', 'normalized'
         channel : str
             Channel name (e.g., 'LI Demod 1 X (A)')
+        sweep_direction : str or None
+            'fwd' or 'bwd'. If None, uses the instance default.
         **kwargs : dict
             Additional parameters for processing (e.g., factor, offset, delete_zero_bias)
 
@@ -334,29 +290,29 @@ class didvmap(point_didv):  # dIdV
             2D array of dI/dV values at the specified sweep index
         """
         if processing == 'raw':
-            return self.raw(sweep_idx, channel)
+            return self.raw(sweep_idx, channel, sweep_direction=sweep_direction)
         elif processing == 'scaled':
-            return self.scaled(sweep_idx, channel, **kwargs)
+            return self.scaled(sweep_idx, channel, sweep_direction=sweep_direction, **kwargs)
         elif processing == 'normalized':
-            return self.normalized(sweep_idx, channel, **kwargs)
+            return self.normalized(sweep_idx, channel, sweep_direction=sweep_direction, **kwargs)
         else:
             raise ValueError(f"Unknown processing method: {processing}")
 
-    def raw(self, sweep_idx, channel='LI Demod 1 X (A)'):
+    def raw(self, sweep_idx, channel='LI Demod 1 X (A)', sweep_direction=None):
         """Get raw dI/dV map at a specific sweep index."""
-        channel_name = self.get_channel_name(channel, include_avg=self.has_averaged_data())
+        channel_name = self.get_channel_name(channel, include_avg=self.has_averaged_data(), sweep_direction=sweep_direction)
         didv = self.signals[channel_name][:, :, sweep_idx]
         return didv
 
-    def scaled(self, sweep_idx, channel='LI Demod 1 X', offset='none'):
+    def scaled(self, sweep_idx, channel='LI Demod 1 X', offset='none', sweep_direction=None):
         """Get scaled dI/dV map at a specific sweep index."""
-        channel_name = self.get_channel_name(channel, include_avg=self.has_averaged_data())
+        channel_name = self.get_channel_name(channel, include_avg=self.has_averaged_data(), sweep_direction=sweep_direction)
         didv_raw = np.copy(self.signals[channel_name])
         if offset != 'none':
             didv_raw = didv_raw - offset
             
         step = self.signals['sweep_signal'][1] - self.signals['sweep_signal'][0]
-        current_channel = self.get_channel_name('Current', include_avg=self.has_averaged_data())
+        current_channel = self.get_channel_name('Current', include_avg=self.has_averaged_data(), sweep_direction=sweep_direction)
         
         # Calculate numerical derivatives and scale factor across the entire 3D grid
         didv_numerical = np.gradient(self.signals[current_channel], step, axis=2, edge_order=2)
@@ -365,16 +321,16 @@ class didvmap(point_didv):  # dIdV
         didv_map = scale_factors * didv_raw[:, :, sweep_idx]
         return didv_map
 
-    def normalized(self, sweep_idx, channel='LI Demod 1 X', factor=0.2, offset='none', delete_zero_bias=True):
+    def normalized(self, sweep_idx, channel='LI Demod 1 X', factor=0.2, offset='none', delete_zero_bias=True, sweep_direction=None):
         """Get normalized dI/dV map at a specific sweep index (Vectorized 3D Volume)."""
-        channel_name = self.get_channel_name(channel, include_avg=self.has_averaged_data())
+        channel_name = self.get_channel_name(channel, include_avg=self.has_averaged_data(), sweep_direction=sweep_direction)
         didv_raw = np.copy(self.signals[channel_name])
         if offset != 'none':
             didv_raw = didv_raw - offset
         
         V = self.signals['sweep_signal']
         step = V[1] - V[0]
-        current_channel = self.get_channel_name('Current', include_avg=self.has_averaged_data())
+        current_channel = self.get_channel_name('Current', include_avg=self.has_averaged_data(), sweep_direction=sweep_direction)
         
         didv_numerical = np.gradient(self.signals[current_channel], step, axis=2, edge_order=2)
         
@@ -417,9 +373,9 @@ class didvmap(point_didv):  # dIdV
             
         return Normalized_dIdV[:, :, sweep_idx]
 
-    def get_currentmap(self, sweep_idx):
+    def get_currentmap(self, sweep_idx, sweep_direction=None):
         """Get current map at a specific sweep index."""
-        current_channel = self.get_channel_name('Current', include_avg=self.has_averaged_data())
+        current_channel = self.get_channel_name('Current', include_avg=self.has_averaged_data(), sweep_direction=sweep_direction)
         return self.signals[current_channel][:, :, sweep_idx]
 
     # def get_currentmap(self, sweep_idx):
@@ -442,7 +398,7 @@ class point_iz:
         self.signals = instance.signals
         self.sweep_dir = sweep_direction
 
-    def get_channel_name(self, base_channel, include_avg=False, bwd=None):
+    def get_channel_name(self, base_channel, include_avg=False, bwd=None, sweep_direction=None):
         """
         Parameters:
         -----------
@@ -451,14 +407,17 @@ class point_iz:
         include_avg : bool
             Whether to include the [AVG] tag
         bwd : bool or None
-            If True, forces [bwd] tag. If None, uses self.sweep_dir
+            If True, forces [bwd] tag. If None, uses sweep_direction/self.sweep_dir
+        sweep_direction : str or None
+            'fwd' or 'bwd'. If None, uses the instance default (self.sweep_dir).
         """
+        sd = sweep_direction if sweep_direction is not None else self.sweep_dir
         channel_base = base_channel.replace(' (A)', '')
         
         tags = []
         if include_avg:
             tags.append('[AVG]')
-        if bwd or (bwd is None and self.sweep_dir == 'bwd'):
+        if bwd is True or (bwd is None and sd == 'bwd'):
             tags.append('[bwd]')
             
         if tags:
@@ -474,27 +433,28 @@ class point_iz:
         """
         return 'Current [AVG] (A)' in self.signals.keys()
 
-    def get_iz_raw(self, line, pixel):
+    def get_iz_raw(self, line, pixel, sweep_direction=None):
         """
         Returns
         -------
         tuple
             (Z (m), Current (A))
         """        
-        channel_name = self.get_channel_name('Current', include_avg=self.has_averaged_data())
-        return self.signals['sweep_signal'], self.signals[channel_name][line, pixel]
+        current_channel = self.get_channel_name('Current', include_avg=self.has_averaged_data(), sweep_direction=sweep_direction)
+        return self.signals['sweep_signal'], self.signals[current_channel][line, pixel]
 
-    def get_apparent_barrier_height(self, line, pixel, fitting_current_range=(1e-12, 10e-12)):
+    def get_apparent_barrier_height(self, line, pixel, fitting_current_range=(1e-12, 10e-12), sweep_direction=None):
+        sd = sweep_direction if sweep_direction is not None else self.sweep_dir
         def linear(x, barr, b):
             return -2*(np.sqrt(2*0.51099895e+6*barr)/(6.582119569e-16*2.99792458e+8))*x + b
         
         z = self.signals['sweep_signal']
-        if self.sweep_dir == 'AVG':
-            fwd_current = self.signals[self.get_channel_name('Current', include_avg=self.has_averaged_data())][line, pixel]
-            bwd_current = self.signals[self.get_channel_name('Current', include_avg=self.has_averaged_data(), bwd=True)][line, pixel]
+        if sd == 'AVG':
+            fwd_current = self.signals[self.get_channel_name('Current', include_avg=self.has_averaged_data(), sweep_direction='fwd')][line, pixel]
+            bwd_current = self.signals[self.get_channel_name('Current', include_avg=self.has_averaged_data(), bwd=True, sweep_direction='fwd')][line, pixel]
             I = np.abs(np.nanmean([fwd_current, bwd_current], axis=0))
         else:
-            channel_name = self.get_channel_name('Current', include_avg=self.has_averaged_data())
+            channel_name = self.get_channel_name('Current', include_avg=self.has_averaged_data(), sweep_direction=sd)
             I = np.abs(self.signals[channel_name][line, pixel])
 
         idx = np.where((fitting_current_range[0] <= I) & (I <= fitting_current_range[1]))
@@ -512,14 +472,15 @@ class izmap(point_iz):  # I-z spec, apparent barrier map
     def __init__(self, instance, sweep_direction='fwd'):
         super().__init__(instance, sweep_direction)
     
-    def get_izmap(self, sweep_idx):
-        if self.sweep_dir == 'AVG':
-            fwd_current = self.signals[self.get_channel_name('Current', include_avg=False)][:, :, sweep_idx]
-            bwd_current = self.signals[self.get_channel_name('Current', include_avg=False, bwd=True)][:, :, sweep_idx]
+    def get_izmap(self, sweep_idx, sweep_direction=None):
+        sd = sweep_direction if sweep_direction is not None else self.sweep_dir
+        if sd == 'AVG':
+            fwd_current = self.signals[self.get_channel_name('Current', include_avg=False, sweep_direction='fwd')][:, :, sweep_idx]
+            bwd_current = self.signals[self.get_channel_name('Current', include_avg=False, bwd=True, sweep_direction='fwd')][:, :, sweep_idx]
             current = np.nanmean([fwd_current, bwd_current], axis=0)
         else:
             current = self.signals[self.get_channel_name('Current', 
-                                                        include_avg=self.has_averaged_data())][:, :, sweep_idx]
+                                                        include_avg=self.has_averaged_data(), sweep_direction=sd)][:, :, sweep_idx]
         return current
 
     # def get_currentmap(self, sweep_idx):
@@ -532,7 +493,7 @@ class izmap(point_iz):  # I-z spec, apparent barrier map
     #                                                     include_avg=self.has_averaged_data())][:, :, sweep_idx]
     #     return current
     
-    def get_apparent_barrier_height_map(self, fitting_current_range=(1e-12, 10e-12)):
+    def get_apparent_barrier_height_map(self, fitting_current_range=(1e-12, 10e-12), sweep_direction=None):
         lines, pixels = self.header['dim_px'][1], self.header['dim_px'][0]
         arr = np.zeros((lines, pixels))
         # err = np.zeros((lines, pixels))
@@ -540,7 +501,7 @@ class izmap(point_iz):  # I-z spec, apparent barrier map
             for j in range(pixels):
                 try:
                     # arr[i, j], err[i, j] = self.get_apparent_barrier_height(i, j, fitting_current_range)
-                    arr[i, j] = self.get_apparent_barrier_height(i, j, fitting_current_range)
+                    arr[i, j] = self.get_apparent_barrier_height(i, j, fitting_current_range, sweep_direction=sweep_direction)
                 except Exception as e:
                     print(f'Estimation error at: {i, j}. {str(e)}')
                     arr[i, j] = np.nan

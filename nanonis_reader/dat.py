@@ -68,7 +68,7 @@ class spectrum:
         self.channel = sts_channel
         self.sweep_dir = sweep_direction
 
-    def get_channel_name(self, base_channel, include_avg=False):
+    def get_channel_name(self, base_channel, include_avg=False, sweep_direction=None):
         """
         Returns a channel name with appropriate [AVG] and [bwd] tags added to the base channel name.
         
@@ -78,12 +78,15 @@ class spectrum:
             Base channel name (e.g., 'LI Demod 1 X (A)' or 'Current (A)')
         include_avg : bool
             Whether to include the [AVG] tag
+        sweep_direction : str or None
+            'fwd' or 'bwd'. If None, uses the instance default (self.sweep_dir).
             
         Returns:
         --------
         str
             Complete channel name with appropriate tags
         """
+        sd = sweep_direction if sweep_direction is not None else self.sweep_dir
         # Get base channel name up to (A)
         channel_base = base_channel.replace(' (A)', '')
         
@@ -91,7 +94,7 @@ class spectrum:
         tags = []
         if include_avg:
             tags.append('[AVG]')
-        if self.sweep_dir == 'bwd':
+        if sd == 'bwd':
             tags.append('[bwd]')
             
         # Join tags with spaces
@@ -108,7 +111,7 @@ class spectrum:
         """
         return 'Current [AVG] (A)' in self.signals.keys()
 
-    def didv_raw(self):
+    def didv_raw(self, sweep_direction=None):
         '''
         Returns
         -------
@@ -116,10 +119,10 @@ class spectrum:
             (Bias (V), raw dIdV (a.u.))
         '''
         has_avg = self.has_averaged_data()
-        channel_name = self.get_channel_name(self.channel, include_avg=has_avg)
+        channel_name = self.get_channel_name(self.channel, include_avg=has_avg, sweep_direction=sweep_direction)
         return self.signals['Bias calc (V)'], self.signals[channel_name]
     
-    def didv_scaled(self):
+    def didv_scaled(self, sweep_direction=None):
         '''
         Returns
         -------
@@ -127,11 +130,11 @@ class spectrum:
             (Bias (V), dIdV (S))
         '''
         has_avg = self.has_averaged_data()
-        channel_name = self.get_channel_name(self.channel, include_avg=has_avg)
-        V, numerical_didv = self.didv_numerical()
+        channel_name = self.get_channel_name(self.channel, include_avg=has_avg, sweep_direction=sweep_direction)
+        V, numerical_didv = self.didv_numerical(sweep_direction=sweep_direction)
         return V, np.median(numerical_didv/self.signals[channel_name])*self.signals[channel_name]
     
-    def didv_numerical(self):
+    def didv_numerical(self, sweep_direction=None):
         '''
         Returns
         -------
@@ -139,7 +142,7 @@ class spectrum:
             (Bias (V), numerical dIdV (S))
         '''        
         step = self.signals['Bias calc (V)'][1] - self.signals['Bias calc (V)'][0]
-        current_channel = self.get_channel_name('Current', include_avg=self.has_averaged_data())
+        current_channel = self.get_channel_name('Current', include_avg=self.has_averaged_data(), sweep_direction=sweep_direction)
         didv = np.gradient(self.signals[current_channel], step, edge_order=2)
         return self.signals['Bias calc (V)'], didv
     
@@ -199,14 +202,14 @@ class spectrum:
     #     else:
     #         return V, Normalized_dIdV
 
-    def didv_normalized(self, factor=0.2, delete_zero_bias=True):
+    def didv_normalized(self, factor=0.2, delete_zero_bias=True, sweep_direction=None):
         """
         Returns
         -------
         tuple
             (Bias (V), normalized dIdV)
         """
-        V, dIdV = self.didv_scaled()
+        V, dIdV = self.didv_scaled(sweep_direction=sweep_direction)
         I_cal = cumtrapz(dIdV, V, initial=0)
 
         zero = np.argwhere(abs(V) == np.min(abs(V)))[0, 0]
@@ -228,14 +231,14 @@ class spectrum:
         else:
             return V, Normalized_dIdV
 
-    def iv_raw(self):
+    def iv_raw(self, sweep_direction=None):
         '''
         Returns
         -------
         tuple
             (Bias (V), Current (A))
         '''        
-        current_channel = self.get_channel_name('Current', include_avg=self.has_averaged_data())
+        current_channel = self.get_channel_name('Current', include_avg=self.has_averaged_data(), sweep_direction=sweep_direction)
         return self.signals['Bias calc (V)'], self.signals[current_channel]
     
     def dzdv_numerical(self):

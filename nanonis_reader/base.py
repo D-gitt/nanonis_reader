@@ -27,3 +27,129 @@ class load:
         
         self.header = reader.header
         self.signals = reader.signals
+
+    # ── Lazy properties ─────────────────────────────────────────────
+    # These allow  d.topo.get_z(...)  instead of  nr.sxm.topography(d).get_z(...)
+
+    def _require_ext(self, name, *exts):
+        if self.extension not in exts:
+            raise AttributeError(
+                f".{name} is not available for .{self.extension} files "
+                f"(requires {', '.join('.' + e for e in exts)})"
+            )
+
+    # --- shared across .sxm / .3ds ---
+
+    @property
+    def topo(self):
+        """Topography processor (available for .sxm and .3ds)."""
+        if self.extension == 'sxm':
+            from . import sxm
+            return sxm.topography(self)
+        if self.extension == '3ds':
+            from . import grid
+            return grid.topography(self)
+        self._require_ext('topo', 'sxm', '3ds')
+
+    @property
+    def didv(self):
+        """dI/dV map processor (available for .sxm and .3ds)."""
+        if self.extension == 'sxm':
+            from . import sxm
+            return sxm.didvmap(self)
+        if self.extension == '3ds':
+            from . import grid
+            return grid.didvmap(self)
+        self._require_ext('didv', 'sxm', '3ds')
+
+    # --- .sxm only ---
+
+    @property
+    def current(self):
+        """Current map processor (available for .sxm)."""
+        self._require_ext('current', 'sxm')
+        from . import sxm
+        return sxm.currentmap(self)
+
+    @property
+    def fft(self):
+        """FFT processor (available for .sxm)."""
+        self._require_ext('fft', 'sxm')
+        from . import sxm
+        return sxm.fft(self)
+
+    # --- .dat only ---
+
+    @property
+    def spec(self):
+        """Point spectrum processor (available for .dat)."""
+        self._require_ext('spec', 'dat')
+        from . import dat
+        return dat.spectrum(self)
+
+    @property
+    def z_spec(self):
+        """Z-spectroscopy processor (available for .dat)."""
+        self._require_ext('z_spec', 'dat')
+        from . import dat
+        return dat.z_spectrum(self)
+
+    @property
+    def noise(self):
+        """Noise spectrum processor (available for .dat)."""
+        self._require_ext('noise', 'dat')
+        from . import dat
+        return dat.noise_spectrum(self)
+
+    @property
+    def history(self):
+        """History data processor (available for .dat)."""
+        self._require_ext('history', 'dat')
+        from . import dat
+        return dat.history_data(self)
+
+    @property
+    def longterm(self):
+        """Long-term data processor (available for .dat)."""
+        self._require_ext('longterm', 'dat')
+        from . import dat
+        return dat.longterm_data(self)
+
+    # --- .3ds only ---
+
+    @property
+    def point(self):
+        """Point dI/dV processor (available for .3ds)."""
+        self._require_ext('point', '3ds')
+        from . import grid
+        return grid.point_didv(self)
+
+    @property
+    def point_iz(self):
+        """Point I-z processor (available for .3ds)."""
+        self._require_ext('point_iz', '3ds')
+        from . import grid
+        return grid.point_iz(self)
+
+    @property
+    def iz(self):
+        """I-z map processor (available for .3ds)."""
+        self._require_ext('iz', '3ds')
+        from . import grid
+        return grid.izmap(self)
+
+    @property
+    def linespec(self):
+        """Line spectrum processor (available for .3ds)."""
+        self._require_ext('linespec', '3ds')
+        from . import grid
+        return grid.line_spectrum(self)
+
+    # --- .nsp only ---
+
+    @property
+    def ltspec(self):
+        """Long-term spectrum processor (available for .nsp)."""
+        self._require_ext('ltspec', 'nsp')
+        from . import nsp as nsp_mod
+        return nsp_mod.ltspec(self)

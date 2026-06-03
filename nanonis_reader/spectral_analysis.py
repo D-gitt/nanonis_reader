@@ -144,3 +144,87 @@ def f_lin_kappa(x, kappa, b):
 # linear function for work function estimation.
 def f_lin_wf(x, wf, b):
     return -2 * ( np.sqrt(2 * 0.51099895e+6 * wf) / (6.582119569e-16 * 2.99792458e+8) ) * x + b
+
+def filter_sigma(data, n_sigma=3, axis=0, weighted=False):
+    """
+    Filter data within ±n_sigma of the mean along the specified axis.
+    
+    Parameters
+    ----------
+    data : array_like
+        Input data.
+        - 1D array: a collection of scalar values. Returns values within ±nσ.
+        - 2D array: a collection of spectra (each row or column is one spectrum).
+          Returns only spectra where ALL points fall within ±nσ at each position.
+    n_sigma : float, optional
+        Number of standard deviations for the threshold. Default is 3.
+    axis : int, optional
+        Axis along which spectra are stacked.
+        - axis=0 (default): each row is one spectrum.
+        - axis=1: each column is one spectrum.
+    weighted : bool, optional
+        If True, uses inverse-std weighted average and weighted standard deviation.
+        Each spectrum is weighted by 1/std(spectrum), so noisier spectra
+        contribute less to the reference mean and σ. Default is False.
+    
+    Returns
+    -------
+    filtered : np.ndarray
+        Data containing only the entries within ±nσ.
+    mask : np.ndarray of bool
+        Boolean mask indicating which entries passed the filter.
+        - 1D: shape (N,) — True for each value within range.
+        - 2D: shape (N,) — True for each spectrum where ALL points are within range.
+    
+    Examples
+    --------
+    # 1D: filter scalar values
+    >>> values = np.array([1, 2, 3, 100, 2, 3])
+    >>> filtered, mask = filter_sigma(values)
+    
+    # 2D: filter spectra (each row = one spectrum)
+    >>> spectra = np.stack([spectrum1, spectrum2, ..., spectrumN])
+    >>> filtered, mask = filter_sigma(spectra, n_sigma=3, axis=0)
+    
+    # 2D with weighted statistics (noisy spectra contribute less)
+    >>> filtered, mask = filter_sigma(spectra, n_sigma=3, weighted=True)
+    """
+    data = np.asarray(data, dtype=float)
+    
+    if data.ndim == 1:
+        mean = np.nanmean(data)
+        std = np.nanstd(data)
+        mask = np.abs(data - mean) <= n_sigma * std
+        return data[mask], mask
+    
+    elif data.ndim == 2:
+        if axis == 1:
+            data = data.T  # normalize to axis=0
+        
+        if weighted:
+            # weight = 1 / std of each spectrum (noisy → lower weight)
+            per_spectrum_std = np.nanstd(data, axis=1)  # shape: (N,)
+            # avoid division by zero for constant spectra
+            per_spectrum_std[per_spectrum_std == 0] = np.inf
+            weights = 1.0 / per_spectrum_std               # shape: (N,)
+            
+            mean = np.average(data, axis=0, weights=weights)  # shape: (M,)
+            std = np.sqrt(
+                np.average((data - mean) ** 2, axis=0, weights=weights)
+            )  # shape: (M,)
+        else:
+            mean = np.nanmean(data, axis=0)  # shape: (M,)
+            std = np.nanstd(data, axis=0)    # shape: (M,)
+        
+        # check each spectrum: all points must be within ±nσ
+        within = np.abs(data - mean) <= n_sigma * std  # shape: (N, M)
+        mask = np.all(within, axis=1)                   # shape: (N,)
+        
+        filtered = data[mask]
+        if axis == 1:
+            filtered = filtered.T
+        
+        return filtered, mask
+    
+    else:
+        raise ValueError(f"filter_sigma supports 1D and 2D arrays, got {data.ndim}D")

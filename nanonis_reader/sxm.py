@@ -98,11 +98,8 @@ class topography:
         return z
     
     def subtract_average (self, scan_direction):
-        z = self.raw(scan_direction)
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            z_subav = z - np.nanmean(z, axis=1, keepdims=True)
-        return z_subav
+        from . import image_processing as ip
+        return ip.subtract_average(self.raw(scan_direction))
 
     # def subtract_linear_fit (self, scan_direction):
     #     import numpy as np
@@ -129,31 +126,8 @@ class topography:
     #     return z_sublf
 
     def subtract_linear_fit(self, scan_direction):        
-        z = self.raw(scan_direction)
-        lines, pixels = np.shape(z)
-        x = np.arange(pixels)
-        
-        nan_rows = np.isnan(z).all(axis=1) # 전부 NaN인 행
-        partial_rows = np.isnan(z).any(axis=1) & ~nan_rows # 일부만 NaN인 행 (스캔 도중 멈춘 라인)
-        valid_rows = ~np.isnan(z).any(axis=1) # 완벽한 행
-        
-        z_sublf = np.full_like(z, np.nan)
-        
-        if np.any(valid_rows):
-            valid_z = z[valid_rows]
-            coeffs = np.polyfit(x, valid_z.T, 1)
-            fitted = (coeffs[0].reshape(-1,1) * x + coeffs[1].reshape(-1,1))
-            z_sublf[valid_rows] = valid_z - fitted
-            
-        # 스캔 도중 멈춘 행들에 대한 부분 피팅
-        for i in np.where(partial_rows)[0]:
-            valid_idx = ~np.isnan(z[i])
-            if np.sum(valid_idx) > 1: # 최소 2점 필요
-                popt = np.polyfit(x[valid_idx], z[i][valid_idx], 1)
-                fitted = popt[0]*x + popt[1]
-                z_sublf[i] = z[i] - fitted
-                
-        return z_sublf
+        from . import image_processing as ip
+        return ip.subtract_linear_fit(self.raw(scan_direction))
     
     
     # def subtract_linear_fit_xy (self, scan_direction):       
@@ -178,33 +152,8 @@ class topography:
     #     return z_sublf.T
 
     def subtract_linear_fit_xy(self, scan_direction):
-        # X 방향 linear fit 제거된 데이터
-        z = self.subtract_linear_fit(scan_direction)
-        lines, pixels = np.shape(z)
-        
-        yrange = round(self.header['scan_range'][1] * 1e9)*1e-9
-        y = np.linspace(0, yrange, lines)
-        
-        nan_cols = np.isnan(z).all(axis=0)
-        partial_cols = np.isnan(z).any(axis=0) & ~nan_cols
-        valid_cols = ~np.isnan(z).any(axis=0)
-        
-        z_sublf = np.full_like(z, np.nan)
-        
-        if np.any(valid_cols):
-            valid_z = z[:, valid_cols]
-            coeffs = np.polyfit(y, valid_z, 1)
-            fitted = (coeffs[0] * y.reshape(-1,1) + coeffs[1])
-            z_sublf[:, valid_cols] = valid_z - fitted
-            
-        for j in np.where(partial_cols)[0]:
-            valid_idx = ~np.isnan(z[:, j])
-            if np.sum(valid_idx) > 1:
-                popt = np.polyfit(y[valid_idx], z[valid_idx, j], 1)
-                fitted = popt[0]*y + popt[1]
-                z_sublf[:, j] = z[:, j] - fitted
-                
-        return z_sublf
+        from . import image_processing as ip
+        return ip.subtract_linear_fit_xy(self.raw(scan_direction))
 
     # def subtract_parabolic_fit (self, scan_direction):
     #     def f_parab(x, a, b, c): return a*(x**2) + b*x + c
@@ -227,30 +176,8 @@ class topography:
     #     return z_subpf
 
     def subtract_parabolic_fit(self, scan_direction):        
-        z = self.raw(scan_direction)
-        lines, pixels = np.shape(z)
-        x = np.arange(pixels)
-        
-        nan_rows = np.isnan(z).all(axis=1) # 전부 NaN인 행
-        partial_rows = np.isnan(z).any(axis=1) & ~nan_rows # 일부만 NaN인 바닥 행
-        valid_rows = ~np.isnan(z).any(axis=1) # 온전한 행
-        
-        z_subpf = np.full_like(z, np.nan)
-        
-        if np.any(valid_rows):
-            valid_z = z[valid_rows]
-            coeffs = np.polyfit(x, valid_z.T, 2)
-            fitted = (coeffs[0].reshape(-1,1) * (x**2) + coeffs[1].reshape(-1,1) * x + coeffs[2].reshape(-1,1))
-            z_subpf[valid_rows] = valid_z - fitted
-            
-        for i in np.where(partial_rows)[0]:
-            valid_idx = ~np.isnan(z[i])
-            if np.sum(valid_idx) > 2: # 최소 3점 필요
-                popt = np.polyfit(x[valid_idx], z[i][valid_idx], 2)
-                fitted = popt[0]*(x**2) + popt[1]*x + popt[2]
-                z_subpf[i] = z[i] - fitted
-                
-        return z_subpf
+        from . import image_processing as ip
+        return ip.subtract_parabolic_fit(self.raw(scan_direction))
     
     # def differentiate (self, scan_direction):
     #     import numpy as np
@@ -264,36 +191,15 @@ class topography:
     #     return z_deriv
 
     def differentiate(self, scan_direction):
-        """
-        스캔 데이터의 미분을 계산하는 함수
-        
-        Args:
-            scan_direction: 스캔 방향
-        
-        Returns:
-            numpy.ndarray: 미분된 데이터
-        """        
+        from . import image_processing as ip
         xrange = round(self.header['scan_range'][0] * 1e9) * 1e-9
         pixels = int(self.header['scan>pixels/line'])
         dx = xrange / pixels
-        
-        # 전체 배열에 대해 한 번에 gradient 계산
-        z_deriv = np.gradient(self.raw(scan_direction), dx, axis=1, edge_order=2)
-        
-        return z_deriv
+        return ip.differentiate(self.raw(scan_direction), dx)
     
     def subtract_plane_fit (self, scan_direction):      
-        # regular grid covering the domain of the data
-        Z = self.raw(scan_direction)
-        X, Y = np.meshgrid( np.arange(np.shape(Z)[1]), np.arange(np.shape(Z)[0]) )
-        
-        # best-fit linear plane
-        A = np.c_[X.flatten(), Y.flatten(), np.ones( np.shape(Z.flatten())[0] )]
-        C, _, _, _ = lstsq(A, Z.flatten())    # coefficients
-
-        # evaluate it on grid
-        plane = C[0]*X + C[1]*Y + C[2]
-        return Z - plane
+        from . import image_processing as ip
+        return ip.subtract_plane_fit(self.raw(scan_direction))
 
 class didvmap:
     
