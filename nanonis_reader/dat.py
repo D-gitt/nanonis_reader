@@ -1,4 +1,4 @@
-import nanonispy as nap
+# nanonispy dependency removed — parsing handled by base.py via _vendor
 import numpy as np
 import os
 from scipy.optimize import curve_fit

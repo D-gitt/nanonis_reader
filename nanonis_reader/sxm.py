@@ -1,4 +1,4 @@
-import nanonispy as nap
+# nanonispy dependency removed — parsing handled by base.py via _vendor
 import os
 import warnings
 import numpy as np

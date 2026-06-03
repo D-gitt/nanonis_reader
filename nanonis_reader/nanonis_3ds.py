@@ -1,4 +1,4 @@
-import nanonispy as nap
+from . import _vendor as nap  # vendored nanonispy (MIT License)
 import os
 import warnings
 import numpy as np

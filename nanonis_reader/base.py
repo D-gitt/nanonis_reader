@@ -1,5 +1,5 @@
 import os
-import nanonispy as nap
+from . import _vendor as nap  # vendored nanonispy (MIT License)
 from . import nsp
 
 class load:

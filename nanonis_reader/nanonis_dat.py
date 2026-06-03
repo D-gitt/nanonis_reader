@@ -1,4 +1,4 @@
-import nanonispy as nap
+from . import _vendor as nap  # vendored nanonispy (MIT License)
 import numpy as np
 import os
 from scipy.optimize import curve_fit

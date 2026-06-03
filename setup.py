@@ -15,7 +15,6 @@ setup(
     url='https://github.com/D-gitt/nanonis_reader',
     install_requires=[
         'matplotlib',
-        'nanonispy',
         'numpy',
         'python-pptx',
         'scipy'
