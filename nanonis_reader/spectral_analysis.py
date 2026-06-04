@@ -1,5 +1,112 @@
 import numpy as np
+import re
 from math import factorial
+
+
+def get_channel_name(base_channel, sweep_direction='fwd', sweep_index=None):
+    """
+    Construct a Nanonis channel name with appropriate tags.
+    
+    Parameters
+    ----------
+    base_channel : str
+        Base channel name (e.g., 'LI Demod 1 X (A)', 'Current (A)')
+    sweep_direction : str
+        'fwd' or 'bwd'. Default is 'fwd'.
+    sweep_index : None, int, or 'all'
+        None  → use [AVG] tag (caller decides whether AVG exists)
+               or no tag if include_avg=False at call site.
+        int   → individual sweep index (0-indexed input → [00001] 1-indexed tag)
+        'all' → returns a placeholder; caller should use find_sweep_channels()
+    
+    Returns
+    -------
+    str
+        Complete channel name with tags.
+    
+    Notes
+    -----
+    Tag ordering follows Nanonis convention: {channel} [AVG/NNNNN] [bwd] (unit)
+    """
+    # Strip unit suffix for tag insertion
+    # e.g., 'LI Demod 1 X (A)' → ('LI Demod 1 X', '(A)')
+    match = re.match(r'^(.*?)\s*(\([^)]*\))$', base_channel.strip())
+    if match:
+        channel_base = match.group(1).strip()
+        unit = match.group(2)
+    else:
+        channel_base = base_channel
+        unit = ''
+    
+    tags = []
+    
+    # Sweep index tag
+    if sweep_index is not None and sweep_index != 'all':
+        tags.append(f'[{sweep_index + 1:05d}]')  # 0-indexed → 1-indexed
+    
+    # Sweep direction tag
+    if sweep_direction == 'bwd':
+        tags.append('[bwd]')
+    
+    if tags:
+        channel_name = f"{channel_base} {' '.join(tags)} {unit}".strip()
+    else:
+        channel_name = f"{channel_base} {unit}".strip() if unit else channel_base
+    
+    return channel_name
+
+
+def has_averaged_data(signals):
+    """
+    Check if a signals dict contains averaged ([AVG]) data.
+    
+    Parameters
+    ----------
+    signals : dict
+        Nanonis signals dictionary.
+    
+    Returns
+    -------
+    bool
+    """
+    return any('[AVG]' in key for key in signals.keys())
+
+
+def find_sweep_channels(signals, base_channel, sweep_direction='fwd'):
+    """
+    Find all individual sweep channels matching [NNNNN] pattern, sorted by index.
+    
+    Parameters
+    ----------
+    signals : dict
+        Nanonis signals dictionary.
+    base_channel : str
+        Base channel name (e.g., 'LI Demod 1 X (A)')
+    sweep_direction : str
+        'fwd' or 'bwd'
+    
+    Returns
+    -------
+    list[str]
+        Sorted list of matching channel names.
+    """
+    match = re.match(r'^(.*?)\s*(\([^)]*\))$', base_channel.strip())
+    if match:
+        channel_base = re.escape(match.group(1).strip())
+        unit = re.escape(match.group(2))
+    else:
+        channel_base = re.escape(base_channel)
+        unit = ''
+    
+    if sweep_direction == 'bwd':
+        pattern = re.compile(rf'^{channel_base}\s+\[\d{{5}}\]\s+\[bwd\]\s+{unit}$')
+    else:
+        # fwd: must NOT contain [bwd]
+        pattern = re.compile(rf'^{channel_base}\s+\[\d{{5}}\]\s+{unit}$')
+    
+    matched = sorted([key for key in signals.keys() if pattern.match(key)])
+    return matched
+
 
 def savitzky_golay(y, window_size, order, deriv = 0, rate = 1):
     r"""

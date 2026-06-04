@@ -68,82 +68,89 @@ class spectrum:
         self.channel = sts_channel
         self.sweep_dir = sweep_direction
 
-    def get_channel_name(self, base_channel, include_avg=False, sweep_direction=None):
+    def _resolve_channel(self, base_channel, sweep_direction=None, sweep_index=None):
         """
-        Returns a channel name with appropriate [AVG] and [bwd] tags added to the base channel name.
-        
-        Parameters:
-        -----------
-        base_channel : str
-            Base channel name (e.g., 'LI Demod 1 X (A)' or 'Current (A)')
-        include_avg : bool
-            Whether to include the [AVG] tag
-        sweep_direction : str or None
-            'fwd' or 'bwd'. If None, uses the instance default (self.sweep_dir).
-            
-        Returns:
-        --------
-        str
-            Complete channel name with appropriate tags
+        Resolve a channel name using the unified get_channel_name function.
+        Handles sweep_index=None (AVG if available, else plain), int, and 'all'.
         """
+        from . import spectral_analysis as sa
         sd = sweep_direction if sweep_direction is not None else self.sweep_dir
-        # Get base channel name up to (A)
-        channel_base = base_channel.replace(' (A)', '')
         
-        # Add tags in order ([AVG], [bwd])
-        tags = []
-        if include_avg:
-            tags.append('[AVG]')
-        if sd == 'bwd':
-            tags.append('[bwd]')
-            
-        # Join tags with spaces
-        if tags:
-            channel_name = f"{channel_base} {' '.join(tags)} (A)"
+        if sweep_index == 'all':
+            return sa.find_sweep_channels(self.signals, base_channel, sd)
+        elif sweep_index is not None:
+            return sa.get_channel_name(base_channel, sweep_direction=sd, sweep_index=sweep_index)
         else:
-            channel_name = f"{channel_base} (A)"
-            
-        return channel_name
+            # None: use [AVG] if available, else plain
+            if sa.has_averaged_data(self.signals):
+                # Build AVG channel name
+                ch = sa.get_channel_name(base_channel, sweep_direction=sd)
+                # Insert [AVG] tag
+                import re
+                m = re.match(r'^(.*?)\s*(\([^)]*\))$', ch.strip())
+                if m:
+                    base, unit = m.group(1).strip(), m.group(2)
+                    # Insert [AVG] before [bwd] if present
+                    if '[bwd]' in base:
+                        avg_ch = base.replace('[bwd]', '[AVG] [bwd]') + ' ' + unit
+                    else:
+                        avg_ch = base + ' [AVG] ' + unit
+                    return avg_ch
+                return ch
+            else:
+                return sa.get_channel_name(base_channel, sweep_direction=sd)
 
-    def has_averaged_data(self):
+    def _get_data(self, base_channel, sweep_direction=None, sweep_index=None):
         """
-        Checks if the dataset contains averaged signals.
+        Get signal data for a channel, supporting sweep_index='all' (returns stacked array).
         """
-        return 'Current [AVG] (A)' in self.signals.keys()
+        resolved = self._resolve_channel(base_channel, sweep_direction, sweep_index)
+        if isinstance(resolved, list):  # sweep_index='all'
+            return np.stack([self.signals[ch] for ch in resolved])
+        else:
+            return self.signals[resolved]
 
-    def didv_raw(self, sweep_direction=None):
+    def didv_raw(self, sweep_direction=None, sweep_index=None):
         '''
         Returns
         -------
         tuple
             (Bias (V), raw dIdV (a.u.))
+            If sweep_index='all': (Bias (V), stacked 2D array)
         '''
-        has_avg = self.has_averaged_data()
-        channel_name = self.get_channel_name(self.channel, include_avg=has_avg, sweep_direction=sweep_direction)
-        return self.signals['Bias calc (V)'], self.signals[channel_name]
+        data = self._get_data(self.channel, sweep_direction, sweep_index)
+        return self.signals['Bias calc (V)'], data
     
-    def didv_scaled(self, sweep_direction=None):
+    def didv_scaled(self, sweep_direction=None, sweep_index=None):
         '''
         Returns
         -------
         tuple
             (Bias (V), dIdV (S))
+            If sweep_index='all': (Bias (V), stacked 2D array)
         '''
-        has_avg = self.has_averaged_data()
-        channel_name = self.get_channel_name(self.channel, include_avg=has_avg, sweep_direction=sweep_direction)
-        V, numerical_didv = self.didv_numerical(sweep_direction=sweep_direction)
-        return V, np.median(numerical_didv/self.signals[channel_name])*self.signals[channel_name]
+        raw = self._get_data(self.channel, sweep_direction, sweep_index)
+        V, numerical_didv = self.didv_numerical(sweep_direction=sweep_direction, sweep_index=sweep_index)
+        if raw.ndim == 2:  # sweep_index='all'
+            scale = np.median(numerical_didv / raw, axis=1, keepdims=True)
+            return V, scale * raw
+        else:
+            return V, np.median(numerical_didv / raw) * raw
     
-    def didv_numerical(self, sweep_direction=None):
+    def didv_numerical(self, sweep_direction=None, sweep_index=None):
         '''
         Returns
         -------
         tuple
             (Bias (V), numerical dIdV (S))
+            If sweep_index='all': (Bias (V), stacked 2D array)
         '''        
         step = self.signals['Bias calc (V)'][1] - self.signals['Bias calc (V)'][0]
-        current_channel = self.get_channel_name('Current', include_avg=self.has_averaged_data(), sweep_direction=sweep_direction)
-        didv = np.gradient(self.signals[current_channel], step, edge_order=2)
+        current = self._get_data('Current (A)', sweep_direction, sweep_index)
+        if current.ndim == 2:  # sweep_index='all'
+            didv = np.gradient(current, step, axis=1, edge_order=2)
+        else:
+            didv = np.gradient(current, step, edge_order=2)
         return self.signals['Bias calc (V)'], didv
     
     # def didv_normalized(self, factor=0.2, delete_zero_bias=True):
@@ -202,14 +209,30 @@ class spectrum:
     #     else:
     #         return V, Normalized_dIdV
 
-    def didv_normalized(self, factor=0.2, delete_zero_bias=True, sweep_direction=None):
+    def didv_normalized(self, factor=0.2, delete_zero_bias=True, sweep_direction=None, sweep_index=None):
         """
         Returns
         -------
         tuple
             (Bias (V), normalized dIdV)
+            If sweep_index='all': (Bias (V), stacked 2D array)
         """
-        V, dIdV = self.didv_scaled(sweep_direction=sweep_direction)
+        V, dIdV = self.didv_scaled(sweep_direction=sweep_direction, sweep_index=sweep_index)
+        
+        if dIdV.ndim == 2:  # sweep_index='all'
+            results = []
+            for i in range(dIdV.shape[0]):
+                _, norm = self._normalize_single(V, dIdV[i], factor, delete_zero_bias)
+                results.append(norm)
+            if delete_zero_bias:
+                zero = np.argwhere(abs(V) == np.min(abs(V)))[0, 0]
+                V = np.delete(V, zero)
+            return V, np.stack(results)
+        else:
+            return self._normalize_single(V, dIdV, factor, delete_zero_bias)
+    
+    def _normalize_single(self, V, dIdV, factor=0.2, delete_zero_bias=True):
+        """Normalize a single dIdV spectrum."""
         I_cal = cumtrapz(dIdV, V, initial=0)
 
         zero = np.argwhere(abs(V) == np.min(abs(V)))[0, 0]
@@ -231,15 +254,16 @@ class spectrum:
         else:
             return V, Normalized_dIdV
 
-    def iv_raw(self, sweep_direction=None):
+    def iv_raw(self, sweep_direction=None, sweep_index=None):
         '''
         Returns
         -------
         tuple
             (Bias (V), Current (A))
+            If sweep_index='all': (Bias (V), stacked 2D array)
         '''        
-        current_channel = self.get_channel_name('Current', include_avg=self.has_averaged_data(), sweep_direction=sweep_direction)
-        return self.signals['Bias calc (V)'], self.signals[current_channel]
+        data = self._get_data('Current (A)', sweep_direction, sweep_index)
+        return self.signals['Bias calc (V)'], data
     
     def dzdv_numerical(self):
         '''
@@ -443,37 +467,51 @@ class z_spectrum:
     #     self.signals = getattr(nap.read, self.file.filetype.capitalize())(self.file.fname).signals
     #     self.sweep_dir = sweep_direction # 'fwd' or 'bwd'
         
-    def get_iz(self): # Better naming is welcome.
+    def get_iz(self, sweep_direction=None, sweep_index=None):
         '''
         Returns
         -------
         tuple
             (Z rel (m), Current (A))
-        '''        
-        I_fwd = next(
-                        (
-                            self.signals[key] for key in ['Current (A)', 'Current [AVG] (A)'] 
-                            if key in self.signals
-                        ),
-                        None
-                    )
-        I_bwd = next(
-                        (
-                            self.signals[key] for key in ['Current [bwd] (A)', 'Current [AVG] [bwd] (A)'] 
-                            if key in self.signals
-                        ),
-                        None
-                    )
-        if self.sweep_dir == 'fwd':
-            I = I_fwd
-        elif self.sweep_dir == 'bwd':
-            I = I_bwd
-        elif self.sweep_dir == 'AVG':
-            I = np.mean( [I_fwd, I_bwd], axis = 0 )
-        elif self.sweep_dir == 'save all':
-            I = np.array([self.signals[channel] for channel in np.sort(list(self.signals.keys()))[:-3]])
-                
-        return self.signals['Z rel (m)'], I
+            If sweep_index='all': (Z rel (m), stacked 2D array)
+        '''
+        from . import spectral_analysis as sa
+        sd = sweep_direction if sweep_direction is not None else self.sweep_dir
+        
+        # Backward compatibility: sweep_dir='save all' → sweep_index='all'
+        if sd == 'save all':
+            sd = 'fwd'
+            sweep_index = 'all'
+        
+        if sweep_index == 'all':
+            channels = sa.find_sweep_channels(self.signals, 'Current (A)', sd)
+            I = np.stack([self.signals[ch] for ch in channels])
+            return self.signals['Z rel (m)'], I
+        elif sweep_index is not None:
+            ch = sa.get_channel_name('Current (A)', sweep_direction=sd, sweep_index=sweep_index)
+            return self.signals['Z rel (m)'], self.signals[ch]
+        elif sd == 'AVG':
+            # fwd + bwd average
+            if sa.has_averaged_data(self.signals):
+                I_fwd = self.signals.get('Current [AVG] (A)')
+                I_bwd = self.signals.get('Current [AVG] [bwd] (A)')
+            else:
+                I_fwd = self.signals.get('Current (A)')
+                I_bwd = self.signals.get('Current [bwd] (A)')
+            if I_fwd is not None and I_bwd is not None:
+                I = np.mean([I_fwd, I_bwd], axis=0)
+            elif I_fwd is not None:
+                I = I_fwd
+            else:
+                I = I_bwd
+            return self.signals['Z rel (m)'], I
+        else:
+            # fwd or bwd
+            if sa.has_averaged_data(self.signals):
+                ch = f"Current [AVG] (A)" if sd == 'fwd' else f"Current [AVG] [bwd] (A)"
+            else:
+                ch = f"Current (A)" if sd == 'fwd' else f"Current [bwd] (A)"
+            return self.signals['Z rel (m)'], self.signals[ch]
 
     def get_apparent_barrier_height(self, fitting_current_range=(1e-12, 10e-12)): # fitting_current_range: current range in A unit.
         '''
