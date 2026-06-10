@@ -1,7 +1,56 @@
 import numpy as np
 import re
 from math import factorial
+from scipy.optimize import curve_fit
+try:
+    from scipy.integrate import cumtrapz
+except ImportError:
+    from scipy.integrate import cumulative_trapezoid as cumtrapz
 
+
+def normalize_didv(V, dIdV, factor=0.2, delete_zero_bias=False):
+    """
+    Normalize a single dI/dV spectrum.
+
+    Parameters
+    ----------
+    V : np.ndarray
+        Bias voltage array (1D).
+    dIdV : np.ndarray
+        dI/dV values (1D, same length as V).
+    factor : float, optional
+        Normalization broadening factor (δ). Default is 0.2.
+    delete_zero_bias : bool, optional
+        If True, removes the zero-bias point from the result. Default is True.
+
+    Returns
+    -------
+    tuple of (V, normalized_dIdV)
+        If delete_zero_bias is True, the zero-bias point is removed from both arrays.
+
+    Notes
+    -----
+    Uses the L'Hôpital correction: at V → 0, I/V is replaced with the slope
+    from a 3-point linear fit around zero bias, avoiding division by zero.
+    """
+    I_cal = cumtrapz(dIdV, V, initial=0)
+
+    zero = np.argwhere(abs(V) == np.min(abs(V)))[0, 0]
+    popt, _ = curve_fit(lambda x, a, b: a*x + b, V[zero-1:zero+2], I_cal[zero-1:zero+2])
+    I_cal -= popt[1]
+
+    with np.errstate(divide='ignore', invalid='ignore'):
+        IV_cal = I_cal / V
+        if abs(V[zero]) < 1e-5:
+            IV_cal[zero] = popt[0]  # L'Hôpital: V→0 → I/V = dI/dV
+
+    delta = factor * np.nanmedian(IV_cal)
+    Normalized_dIdV = dIdV / np.sqrt(np.square(delta) + np.square(IV_cal))
+
+    if delete_zero_bias:
+        return np.delete(V, zero), np.delete(Normalized_dIdV, zero)
+    else:
+        return V, Normalized_dIdV
 
 def get_channel_name(base_channel, sweep_direction='fwd', sweep_index=None):
     """

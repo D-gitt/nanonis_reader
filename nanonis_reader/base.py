@@ -115,32 +115,47 @@ class load:
         from . import dat
         return dat.longterm_data(self)
 
-    # --- .3ds only ---
+    # --- .3ds: new unified API ---
+
+    @property
+    def sts(self):
+        """STS grid spectroscopy (available for .3ds).
+        
+        Returns full 3D arrays. Use numpy slicing for point/map/line.
+        """
+        self._require_ext('sts', '3ds')
+        from . import grid
+        return grid.sts(self)
+
+    @property
+    def iz(self):
+        """I-z grid spectroscopy (available for .3ds).
+        
+        Returns full 3D arrays. Use numpy slicing for point/map.
+        """
+        self._require_ext('iz', '3ds')
+        from . import grid
+        return grid.iz(self)
+
+    # --- .3ds: deprecated wrappers (backward compatibility) ---
 
     @property
     def point(self):
-        """Point dI/dV processor (available for .3ds)."""
+        """[Deprecated] Use d.sts instead. Point dI/dV processor (.3ds)."""
         self._require_ext('point', '3ds')
         from . import grid
         return grid.point_didv(self)
 
     @property
     def point_iz(self):
-        """Point I-z processor (available for .3ds)."""
+        """[Deprecated] Use d.iz instead. Point I-z processor (.3ds)."""
         self._require_ext('point_iz', '3ds')
         from . import grid
         return grid.point_iz(self)
 
     @property
-    def iz(self):
-        """I-z map processor (available for .3ds)."""
-        self._require_ext('iz', '3ds')
-        from . import grid
-        return grid.izmap(self)
-
-    @property
     def linespec(self):
-        """Line spectrum processor (available for .3ds)."""
+        """[Deprecated] Use d.sts instead. Line spectrum processor (.3ds)."""
         self._require_ext('linespec', '3ds')
         from . import grid
         return grid.line_spectrum(self)
