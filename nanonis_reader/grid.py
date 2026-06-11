@@ -22,6 +22,12 @@ class topography:
         self.signals = instance.signals
     
     def get_z (self, processing = 'raw'):
+        """Deprecated: call processing methods directly, e.g. ``d.topo.subtract_linear_fit()``."""
+        warnings.warn(
+            "topography.get_z() is deprecated. Call processing methods directly: "
+            "d.topo.raw(), d.topo.subtract_linear_fit(), etc.",
+            DeprecationWarning, stacklevel=2
+        )
         if processing == 'raw':
             return self.raw()
         elif processing == 'subtract average':
@@ -74,11 +80,10 @@ class sts:
         didv[line]                # line spectrum (pixels × bias)
     """
 
-    def __init__(self, instance, sweep_direction='fwd'):
+    def __init__(self, instance):
         self.fname = instance.fname
         self.header = instance.header
         self.signals = instance.signals
-        self.sweep_dir = sweep_direction
 
     @property
     def sweep_signal(self):
@@ -87,20 +92,19 @@ class sts:
 
     # ── Channel resolution (single implementation) ──────────────
 
-    def _resolve_channel(self, base_channel, sweep_direction=None, sweep_index=None):
+    def _resolve_channel(self, base_channel, sweep_direction='fwd', sweep_index=None):
         """Resolve channel name (delegates to spectral_analysis.resolve_channel)."""
         from . import spectral_analysis as sa
-        sd = sweep_direction if sweep_direction is not None else self.sweep_dir
-        return sa.resolve_channel(self.signals, base_channel, sd, sweep_index)
+        return sa.resolve_channel(self.signals, base_channel, sweep_direction, sweep_index)
 
-    def _get_3d(self, base_channel, sweep_direction=None):
+    def _get_3d(self, base_channel, sweep_direction='fwd'):
         """Get full 3D signal array for a channel."""
         resolved = self._resolve_channel(base_channel, sweep_direction)
         return self.signals[resolved]
 
     # ── Processing methods (return full 3D) ─────────────────────
 
-    def raw(self, channel='LI Demod 1 X (A)', offset='none', sweep_direction=None):
+    def raw(self, channel='LI Demod 1 X (A)', offset='none', sweep_direction='fwd'):
         """
         Raw dI/dV signal from lock-in amplifier.
         
@@ -114,7 +118,7 @@ class sts:
             data = data - offset
         return self.sweep_signal, data
 
-    def scaled(self, channel='LI Demod 1 X', offset='none', sweep_direction=None):
+    def scaled(self, channel='LI Demod 1 X', offset='none', sweep_direction='fwd'):
         """
         Scaled dI/dV (lock-in signal scaled by numerical derivative ratio).
         
@@ -134,7 +138,7 @@ class sts:
         return self.sweep_signal, scale_factors * didv_raw
 
     def normalized(self, channel='LI Demod 1 X', factor=0.2, offset='none',
-                   delete_zero_bias=False, sweep_direction=None):
+                   delete_zero_bias=False, sweep_direction='fwd'):
         """
         Normalized dI/dV (vectorized 3D volume).
         
@@ -185,7 +189,7 @@ class sts:
             
         return V, Normalized_dIdV
 
-    def numerical(self, sweep_direction=None):
+    def numerical(self, sweep_direction='fwd'):
         """
         Numerical dI/dV from current differentiation.
         
@@ -199,7 +203,7 @@ class sts:
         didv = np.gradient(current, step, axis=2, edge_order=2)
         return self.sweep_signal, didv
 
-    def iv(self, sweep_direction=None):
+    def iv(self, sweep_direction='fwd'):
         """
         Raw I-V curves.
         
@@ -211,7 +215,7 @@ class sts:
         data = self._get_3d('Current (A)', sweep_direction)
         return self.sweep_signal, data
 
-    def currentmap(self, sweep_idx, sweep_direction=None):
+    def currentmap(self, sweep_idx, sweep_direction='fwd'):
         """Current map at a specific bias index.
         
         Returns
@@ -238,31 +242,29 @@ class iz:
         current[:, :, sweep_idx]   # 2D current map at specific Z
     """
 
-    def __init__(self, instance, sweep_direction='fwd'):
+    def __init__(self, instance):
         self.fname = instance.fname
         self.header = instance.header
         self.signals = instance.signals
-        self.sweep_dir = sweep_direction
 
     @property
     def sweep_signal(self):
         """1D Z array."""
         return self.signals['sweep_signal']
 
-    def _resolve_channel(self, base_channel, sweep_direction=None, sweep_index=None):
+    def _resolve_channel(self, base_channel, sweep_direction='fwd', sweep_index=None):
         """Resolve channel name (delegates to spectral_analysis.resolve_channel)."""
         from . import spectral_analysis as sa
-        sd = sweep_direction if sweep_direction is not None else self.sweep_dir
-        return sa.resolve_channel(self.signals, base_channel, sd, sweep_index)
+        return sa.resolve_channel(self.signals, base_channel, sweep_direction, sweep_index)
 
-    def _get_3d(self, base_channel, sweep_direction=None):
+    def _get_3d(self, base_channel, sweep_direction='fwd'):
         """Get full 3D signal array for a channel."""
         resolved = self._resolve_channel(base_channel, sweep_direction)
         return self.signals[resolved]
 
     # ── Processing methods ──────────────────────────────────────
 
-    def raw(self, sweep_direction=None):
+    def raw(self, sweep_direction='fwd'):
         """
         Raw I-z curves.
         
@@ -278,7 +280,7 @@ class iz:
     _HBAR_C = 6.582119569e-16 * 2.99792458e+8  # ℏc (eV·m)
     _ME = 0.51099895e+6  # electron mass (eV/c²)
 
-    def barrier_height(self, fitting_current_range=(1e-12, 10e-12), sweep_direction=None):
+    def barrier_height(self, fitting_current_range=(1e-12, 10e-12), sweep_direction='fwd'):
         """
         Apparent barrier height map (2D).
         
@@ -291,17 +293,16 @@ class iz:
         np.ndarray
             2D array (lines, pixels) of barrier height in eV.
         """
-        sd = sweep_direction if sweep_direction is not None else self.sweep_dir
         lines, pixels = self.header['dim_px'][1], self.header['dim_px'][0]
         z = self.sweep_signal
         
         # Pre-compute log(|I|) for the entire 3D volume at once
-        if sd == 'AVG':
+        if sweep_direction == 'AVG':
             fwd_ch = self._resolve_channel('Current (A)', sweep_direction='fwd')
             bwd_ch = self._resolve_channel('Current (A)', sweep_direction='bwd')
             I_3d = np.abs(np.nanmean([self.signals[fwd_ch], self.signals[bwd_ch]], axis=0))
         else:
-            resolved = self._resolve_channel('Current (A)', sweep_direction=sd)
+            resolved = self._resolve_channel('Current (A)', sweep_direction=sweep_direction)
             I_3d = np.abs(self.signals[resolved])
         
         with np.errstate(divide='ignore', invalid='ignore'):
@@ -321,7 +322,7 @@ class iz:
                     arr[i, j] = np.nan
         return arr
 
-    def barrier_height_at(self, line, pixel, fitting_current_range=(1e-12, 10e-12), sweep_direction=None):
+    def barrier_height_at(self, line, pixel, fitting_current_range=(1e-12, 10e-12), sweep_direction='fwd'):
         """
         Apparent barrier height at a single pixel.
         
@@ -330,16 +331,15 @@ class iz:
         float
             Barrier height in eV.
         """
-        sd = sweep_direction if sweep_direction is not None else self.sweep_dir
         z = self.sweep_signal
         
-        if sd == 'AVG':
+        if sweep_direction == 'AVG':
             fwd_ch = self._resolve_channel('Current (A)', sweep_direction='fwd')
             bwd_ch = self._resolve_channel('Current (A)', sweep_direction='bwd')
             I_abs = np.abs(np.nanmean([self.signals[fwd_ch][line, pixel], 
                                         self.signals[bwd_ch][line, pixel]], axis=0))
         else:
-            resolved = self._resolve_channel('Current (A)', sweep_direction=sd)
+            resolved = self._resolve_channel('Current (A)', sweep_direction=sweep_direction)
             I_abs = np.abs(self.signals[resolved][line, pixel])
         
         log_I = np.log(I_abs)
@@ -360,13 +360,13 @@ class point_didv:
     Old: ``d.point.get_didv_scaled(line, pixel)``
     New: ``V, didv = d.sts.scaled(); didv[line, pixel]``
     """
-    def __init__(self, instance, sweep_direction='fwd'):
+    def __init__(self, instance):
         warnings.warn(
             "point_didv is deprecated. Use sts instead: "
             "V, data = d.sts.scaled(); data[line, pixel]",
             DeprecationWarning, stacklevel=2
         )
-        self._sts = sts(instance, sweep_direction)
+        self._sts = sts(instance)
 
     def _resolve_channel(self, *args, **kwargs):
         return self._sts._resolve_channel(*args, **kwargs)
@@ -451,11 +451,11 @@ class didvmap(point_didv):
     Old: ``d.didv.scaled(sweep_idx)``
     New: ``V, data = d.sts.scaled(); data[:, :, sweep_idx]``
     """
-    def __init__(self, instance, sweep_direction='fwd'):
+    def __init__(self, instance):
         # Suppress the parent deprecation warning to avoid double warning
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
-            super().__init__(instance, sweep_direction)
+            super().__init__(instance)
         warnings.warn(
             "didvmap is deprecated. Use sts instead: "
             "V, data = d.sts.scaled(); data[:, :, sweep_idx]",
@@ -503,13 +503,13 @@ class point_iz:
     Old: ``d.point_iz.get_iz_raw(line, pixel)``
     New: ``Z, data = d.iz.raw(); data[line, pixel]``
     """
-    def __init__(self, instance, sweep_direction='fwd'):
+    def __init__(self, instance):
         warnings.warn(
             "point_iz is deprecated. Use iz instead: "
             "Z, data = d.iz.raw(); data[line, pixel]",
             DeprecationWarning, stacklevel=2
         )
-        self._iz = iz(instance, sweep_direction)
+        self._iz = iz(instance)
 
     def _resolve_channel(self, *args, **kwargs):
         return self._iz._resolve_channel(*args, **kwargs)
@@ -539,10 +539,10 @@ class izmap(point_iz):
     Old: ``d.iz.get_izmap(sweep_idx)``
     New: ``Z, data = d.iz.raw(); data[:, :, sweep_idx]``
     """
-    def __init__(self, instance, sweep_direction='fwd'):
+    def __init__(self, instance):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
-            super().__init__(instance, sweep_direction)
+            super().__init__(instance)
         warnings.warn(
             "izmap is deprecated. Use iz instead: "
             "Z, data = d.iz.raw(); data[:, :, sweep_idx]",

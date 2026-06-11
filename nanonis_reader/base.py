@@ -82,14 +82,14 @@ class load:
 
     @property
     def spec(self):
-        """Point spectrum processor (available for .dat)."""
+        """[Deprecated] Use d.sts instead. Point spectrum processor (.dat)."""
         self._require_ext('spec', 'dat')
         from . import dat
         return dat.spectrum(self)
 
     @property
     def z_spec(self):
-        """Z-spectroscopy processor (available for .dat)."""
+        """[Deprecated] Use d.iz instead. Z-spectroscopy processor (.dat)."""
         self._require_ext('z_spec', 'dat')
         from . import dat
         return dat.z_spectrum(self)
@@ -115,27 +115,35 @@ class load:
         from . import dat
         return dat.longterm_data(self)
 
-    # --- .3ds: new unified API ---
+    # --- .dat / .3ds: unified API ---
 
     @property
     def sts(self):
-        """STS grid spectroscopy (available for .3ds).
+        """STS spectroscopy (available for .dat and .3ds).
         
-        Returns full 3D arrays. Use numpy slicing for point/map/line.
+        .dat: returns 1D spectrum. .3ds: returns full 3D arrays.
         """
-        self._require_ext('sts', '3ds')
-        from . import grid
-        return grid.sts(self)
+        if self.extension == 'dat':
+            from . import dat
+            return dat.sts(self)
+        if self.extension == '3ds':
+            from . import grid
+            return grid.sts(self)
+        self._require_ext('sts', 'dat', '3ds')
 
     @property
     def iz(self):
-        """I-z grid spectroscopy (available for .3ds).
+        """I-z spectroscopy (available for .dat and .3ds).
         
-        Returns full 3D arrays. Use numpy slicing for point/map.
+        .dat: returns 1D spectrum. .3ds: returns full 3D arrays.
         """
-        self._require_ext('iz', '3ds')
-        from . import grid
-        return grid.iz(self)
+        if self.extension == 'dat':
+            from . import dat
+            return dat.iz(self)
+        if self.extension == '3ds':
+            from . import grid
+            return grid.iz(self)
+        self._require_ext('iz', 'dat', '3ds')
 
     # --- .3ds: deprecated wrappers (backward compatibility) ---
 
