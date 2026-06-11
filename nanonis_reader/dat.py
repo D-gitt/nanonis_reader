@@ -31,7 +31,6 @@ class sts:
         numerical() → (Bias (V), numerical dIdV (S))
         normalized()→ (Bias (V), normalized dIdV)
         iv()        → (Bias (V), Current (A))
-        dzdv_numerical() → (Bias (V), numerical dZdV (nm/V))
     '''
     
     def __init__(self, instance, sts_channel='LI Demod 1 X (A)'):
@@ -135,16 +134,35 @@ class sts:
         '''        
         data = self._get_data('Current (A)', sweep_direction, sweep_index)
         return self.signals['Bias calc (V)'], data
+
+
+# ═══════════════════════════════════════════════════════════════════
+# FER (Field Emission Resonance) — inherits from sts
+# ═══════════════════════════════════════════════════════════════════
+
+class fer(sts):
+    '''
+    FER (Field Emission Resonance) spectroscopy processor for .dat files.
+    Inherits all dI/dV methods from sts, and adds dZ/dV analysis.
+    
+    FER = Z-controller ON during bias sweep (Z-controller hold = FALSE).
+    
+    Additional Methods:
+        dzdv_numerical() → (Bias (V), numerical dZdV (nm/V))
+    '''
     
     def dzdv_numerical(self):
         '''
+        Numerical dZ/dV from Z channel differentiation.
+        Only meaningful for FER (Z-controller active during sweep).
+        
         Returns
         -------
         tuple
             (Bias (V), numerical dZdV (nm/V))
         '''        
         step = self.signals['Bias calc (V)'][1] - self.signals['Bias calc (V)'][0]            
-        dzdv = np.gradient(self.signals['Z (m)']*1e9, step, edge_order=2)
+        dzdv = np.gradient(self.signals['Z (m)'] * 1e9, step, edge_order=2)
         return self.signals['Bias calc (V)'], dzdv
 
 

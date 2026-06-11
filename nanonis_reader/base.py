@@ -132,6 +132,30 @@ class load:
         self._require_ext('sts', 'dat', '3ds')
 
     @property
+    def fer(self):
+        """FER (Field Emission Resonance) spectroscopy (available for .dat and .3ds).
+        
+        Same dI/dV methods as sts, plus dzdv_numerical().
+        Auto-validates that Z-controller was active during sweep.
+        """
+        z_hold = self.header.get('Bias Spectroscopy>Z-controller hold', 'TRUE')
+        if z_hold == 'TRUE':
+            import warnings
+            warnings.warn(
+                "This data has Z-controller hold = TRUE (STS mode). "
+                "FER analysis (dZ/dV) may not be meaningful. "
+                "Use d.sts instead.",
+                UserWarning, stacklevel=2
+            )
+        if self.extension == 'dat':
+            from . import dat
+            return dat.fer(self)
+        if self.extension == '3ds':
+            from . import grid
+            return grid.fer(self)
+        self._require_ext('fer', 'dat', '3ds')
+
+    @property
     def iz(self):
         """I-z spectroscopy (available for .dat and .3ds).
         

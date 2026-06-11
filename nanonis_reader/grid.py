@@ -228,6 +228,37 @@ class sts:
 
 
 # ═══════════════════════════════════════════════════════════════════
+# FER (Field Emission Resonance) — inherits from sts
+# ═══════════════════════════════════════════════════════════════════
+
+class fer(sts):
+    """
+    FER (Field Emission Resonance) grid spectroscopy processor.
+    Inherits all dI/dV methods from sts, and adds dZ/dV analysis.
+    
+    FER = Z-controller ON during bias sweep (Z-controller hold = FALSE).
+    
+    Additional Methods:
+        dzdv_numerical(sweep_direction) → (V, dZdV_3d)
+    """
+
+    def dzdv_numerical(self, sweep_direction='fwd'):
+        """
+        Numerical dZ/dV from Z channel differentiation (3D).
+        Only meaningful for FER (Z-controller active during sweep).
+        
+        Returns
+        -------
+        tuple
+            (V, dZdV_3d) where shape is (lines, pixels, bias_points), unit: nm/V
+        """
+        step = self.sweep_signal[1] - self.sweep_signal[0]
+        z = self._get_3d('Z (m)', sweep_direction)
+        dzdv = np.gradient(z * 1e9, step, axis=2, edge_order=2)
+        return self.sweep_signal, dzdv
+
+
+# ═══════════════════════════════════════════════════════════════════
 # I-z (3D spectroscopy: Current vs Z)
 # ═══════════════════════════════════════════════════════════════════
 
