@@ -8,6 +8,46 @@ except ImportError:
     from scipy.integrate import cumulative_trapezoid as cumtrapz
 
 
+def resolve_channel(signals, base_channel, sweep_direction, sweep_index=None):
+    """
+    Resolve a Nanonis channel name with sweep direction, sweep index, and AVG handling.
+    
+    Parameters
+    ----------
+    signals : dict
+        Signal dictionary from the loaded data file.
+    base_channel : str
+        Base channel name, e.g. 'LI Demod 1 X (A)'.
+    sweep_direction : str
+        'fwd' or 'bwd'.
+    sweep_index : None, int, or 'all'
+        None  → use [AVG] if available, else plain.
+        int   → specific sweep index.
+        'all' → return list of all sweep channel names.
+    
+    Returns
+    -------
+    str or list of str
+        Resolved channel name(s).
+    """
+    if sweep_index == 'all':
+        return find_sweep_channels(signals, base_channel, sweep_direction)
+    elif sweep_index is not None:
+        return get_channel_name(base_channel, sweep_direction=sweep_direction, sweep_index=sweep_index)
+    else:
+        if has_averaged_data(signals):
+            ch = get_channel_name(base_channel, sweep_direction=sweep_direction)
+            idx = ch.rfind('(')
+            if idx > 0:
+                base, unit = ch[:idx].strip(), ch[idx:]
+                if '[bwd]' in base:
+                    return base.replace('[bwd]', '[AVG] [bwd]') + ' ' + unit
+                else:
+                    return base + ' [AVG] ' + unit
+            return ch
+        else:
+            return get_channel_name(base_channel, sweep_direction=sweep_direction)
+
 def normalize_didv(V, dIdV, factor=0.2, delete_zero_bias=False):
     """
     Normalize a single dI/dV spectrum.

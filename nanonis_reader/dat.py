@@ -63,36 +63,10 @@ class spectrum:
         self.sweep_dir = sweep_direction
 
     def _resolve_channel(self, base_channel, sweep_direction=None, sweep_index=None):
-        """
-        Resolve a channel name using the unified get_channel_name function.
-        Handles sweep_index=None (AVG if available, else plain), int, and 'all'.
-        """
+        """Resolve a channel name (delegates to spectral_analysis.resolve_channel)."""
         from . import spectral_analysis as sa
         sd = sweep_direction if sweep_direction is not None else self.sweep_dir
-        
-        if sweep_index == 'all':
-            return sa.find_sweep_channels(self.signals, base_channel, sd)
-        elif sweep_index is not None:
-            return sa.get_channel_name(base_channel, sweep_direction=sd, sweep_index=sweep_index)
-        else:
-            # None: use [AVG] if available, else plain
-            if sa.has_averaged_data(self.signals):
-                # Build AVG channel name
-                ch = sa.get_channel_name(base_channel, sweep_direction=sd)
-                # Insert [AVG] tag
-                import re
-                m = re.match(r'^(.*?)\s*(\([^)]*\))$', ch.strip())
-                if m:
-                    base, unit = m.group(1).strip(), m.group(2)
-                    # Insert [AVG] before [bwd] if present
-                    if '[bwd]' in base:
-                        avg_ch = base.replace('[bwd]', '[AVG] [bwd]') + ' ' + unit
-                    else:
-                        avg_ch = base + ' [AVG] ' + unit
-                    return avg_ch
-                return ch
-            else:
-                return sa.get_channel_name(base_channel, sweep_direction=sd)
+        return sa.resolve_channel(self.signals, base_channel, sd, sweep_index)
 
     def _get_data(self, base_channel, sweep_direction=None, sweep_index=None):
         """

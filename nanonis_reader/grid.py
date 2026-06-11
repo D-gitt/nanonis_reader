@@ -88,28 +88,10 @@ class sts:
     # ── Channel resolution (single implementation) ──────────────
 
     def _resolve_channel(self, base_channel, sweep_direction=None, sweep_index=None):
-        """Resolve channel name using unified spectral_analysis functions."""
+        """Resolve channel name (delegates to spectral_analysis.resolve_channel)."""
         from . import spectral_analysis as sa
         sd = sweep_direction if sweep_direction is not None else self.sweep_dir
-        
-        if sweep_index == 'all':
-            return sa.find_sweep_channels(self.signals, base_channel, sd)
-        elif sweep_index is not None:
-            return sa.get_channel_name(base_channel, sweep_direction=sd, sweep_index=sweep_index)
-        else:
-            if sa.has_averaged_data(self.signals):
-                ch = sa.get_channel_name(base_channel, sweep_direction=sd)
-                import re
-                m = re.match(r'^(.*?)\s*(\([^)]*\))$', ch.strip())
-                if m:
-                    base, unit = m.group(1).strip(), m.group(2)
-                    if '[bwd]' in base:
-                        return base.replace('[bwd]', '[AVG] [bwd]') + ' ' + unit
-                    else:
-                        return base + ' [AVG] ' + unit
-                return ch
-            else:
-                return sa.get_channel_name(base_channel, sweep_direction=sd)
+        return sa.resolve_channel(self.signals, base_channel, sd, sweep_index)
 
     def _get_3d(self, base_channel, sweep_direction=None):
         """Get full 3D signal array for a channel."""
@@ -268,28 +250,10 @@ class iz:
         return self.signals['sweep_signal']
 
     def _resolve_channel(self, base_channel, sweep_direction=None, sweep_index=None):
-        """Resolve channel name using unified spectral_analysis functions."""
+        """Resolve channel name (delegates to spectral_analysis.resolve_channel)."""
         from . import spectral_analysis as sa
         sd = sweep_direction if sweep_direction is not None else self.sweep_dir
-        
-        if sweep_index == 'all':
-            return sa.find_sweep_channels(self.signals, base_channel, sd)
-        elif sweep_index is not None:
-            return sa.get_channel_name(base_channel, sweep_direction=sd, sweep_index=sweep_index)
-        else:
-            if sa.has_averaged_data(self.signals):
-                ch = sa.get_channel_name(base_channel, sweep_direction=sd)
-                import re
-                m = re.match(r'^(.*?)\s*(\([^)]*\))$', ch.strip())
-                if m:
-                    base, unit = m.group(1).strip(), m.group(2)
-                    if '[bwd]' in base:
-                        return base.replace('[bwd]', '[AVG] [bwd]') + ' ' + unit
-                    else:
-                        return base + ' [AVG] ' + unit
-                return ch
-            else:
-                return sa.get_channel_name(base_channel, sweep_direction=sd)
+        return sa.resolve_channel(self.signals, base_channel, sd, sweep_index)
 
     def _get_3d(self, base_channel, sweep_direction=None):
         """Get full 3D signal array for a channel."""
