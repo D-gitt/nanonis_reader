@@ -215,63 +215,84 @@ class fft:
     FFT processor for .sxm files.
     
     Methods:
-        two_d_FFT_sqrt(image) → sqrt(|FFT|)
-        two_d_FFT_log(image)  → log(|FFT|)
-        two_d_FFT_lin(image)  → |FFT|
+        sqrt(image)   → sqrt(|FFT|)
+        log(image)    → log(|FFT|)
+        linear(image) → |FFT|
     '''
 
     def __init__(self, instance):
         self.fname = instance.fname
         self.header = instance.header
         self.signals = instance.signals
-        
-    def two_d_FFT_sqrt(self, image):
+
+    def _fft2d(self, image):
+        """Compute centered 2D FFT."""
+        return np.fft.fftshift(np.fft.fft2(image))
+
+    def sqrt(self, image):
         '''
+        FFT amplitude with sqrt scaling (standard for STM).
+        
         Parameters
         ----------
-        image : 2D numpy input
-        Calculate FFT
-
+        image : array_like, 2D
+            Input image (e.g. topography, dI/dV map).
+        
         Returns
         -------
-        image_fit : 2D numpy output
-        Check the scale bar
+        np.ndarray
+            sqrt(|FFT|), zero-frequency centered.
         '''
-        fft = np.fft.fft2(image) # FFT only
-        fft_shift = np.fft.fftshift(fft) #2D FFT 를 위한 image shift
-        image_fft = np.sqrt(np.abs(fft_shift))
-        return image_fft
+        return np.sqrt(np.abs(self._fft2d(image)))
+    
+    def log(self, image):
+        '''
+        FFT amplitude with log scaling.
+        
+        Parameters
+        ----------
+        image : array_like, 2D
+            Input image.
+        
+        Returns
+        -------
+        np.ndarray
+            log(|FFT|), zero-frequency centered.
+        '''
+        return np.log(np.abs(self._fft2d(image)))
+    
+    def linear(self, image):
+        '''
+        FFT amplitude without scaling.
+        
+        Parameters
+        ----------
+        image : array_like, 2D
+            Input image.
+        
+        Returns
+        -------
+        np.ndarray
+            |FFT|, zero-frequency centered.
+        '''
+        return np.abs(self._fft2d(image))
+
+    # ── Deprecated wrappers ──────────────────────────────────────
+    
+    def two_d_FFT_sqrt(self, image):
+        """Deprecated: use ``d.fft.sqrt()`` instead."""
+        warnings.warn("two_d_FFT_sqrt() is deprecated. Use d.fft.sqrt() instead.",
+                      DeprecationWarning, stacklevel=2)
+        return self.sqrt(image)
     
     def two_d_FFT_log(self, image):
-        '''
-        Parameters
-        ----------
-        image : 2D numpy input
-        Calculate FFT
-
-        Returns
-        -------
-        image_fit : 2D numpy output
-        Check the scale bar
-        '''
-        fft = np.fft.fft2(image) # FFT only
-        fft_shift = np.fft.fftshift(fft) #2D FFT 를 위한 image shift
-        image_fft = np.log(np.abs(fft_shift))
-        return image_fft
+        """Deprecated: use ``d.fft.log()`` instead."""
+        warnings.warn("two_d_FFT_log() is deprecated. Use d.fft.log() instead.",
+                      DeprecationWarning, stacklevel=2)
+        return self.log(image)
     
     def two_d_FFT_lin(self, image):
-        '''
-        Parameters
-        ----------
-        image : 2D numpy input
-        Calculate FFT
-
-        Returns
-        -------
-        image_fit : 2D numpy output
-        Check the scale bar
-        '''
-        fft = np.fft.fft2(image) # FFT only
-        fft_shift = np.fft.fftshift(fft) #2D FFT 를 위한 image shift
-        image_fft = np.abs(fft_shift)
-        return image_fft
+        """Deprecated: use ``d.fft.linear()`` instead."""
+        warnings.warn("two_d_FFT_lin() is deprecated. Use d.fft.linear() instead.",
+                      DeprecationWarning, stacklevel=2)
+        return self.linear(image)
