@@ -7,6 +7,47 @@ import warnings
 from numpy.linalg import lstsq
 
 
+# ── RANSAC helper ──────────────────────────────────────────────────
+
+def _validate_method(method):
+    if method not in ('polyfit', 'RANSAC'):
+        raise ValueError(f"method must be 'polyfit' or 'RANSAC', got '{method}'")
+
+def _ransac_fit_1d(x_fit, z_fit, x_predict, degree, residual_threshold=None):
+    """
+    RANSAC polynomial fit on (x_fit, z_fit), predict on x_predict.
+    
+    Returns
+    -------
+    np.ndarray
+        Predicted values at x_predict positions.
+    """
+    from sklearn.linear_model import RANSACRegressor, LinearRegression
+    from sklearn.preprocessing import PolynomialFeatures
+    from sklearn.pipeline import make_pipeline
+    
+    X_fit = x_fit.reshape(-1, 1)
+    X_pred = x_predict.reshape(-1, 1)
+    
+    if degree > 1:
+        estimator = make_pipeline(
+            PolynomialFeatures(degree, include_bias=False),
+            LinearRegression()
+        )
+    else:
+        estimator = LinearRegression()
+    
+    kwargs = {}
+    if residual_threshold is not None:
+        kwargs['residual_threshold'] = residual_threshold
+    if degree > 1:
+        kwargs['min_samples'] = degree + 1
+    
+    ransac = RANSACRegressor(estimator=estimator, **kwargs)
+    ransac.fit(X_fit, z_fit)
+    return ransac.predict(X_pred)
+
+
 def subtract_average(z):
     """
     Subtract the row-wise average from a 2D array.
@@ -27,7 +68,7 @@ def subtract_average(z):
         return z - np.nanmean(z, axis=1, keepdims=True)
 
 
-def subtract_linear_fit(z):
+def subtract_linear_fit(z, method='polyfit', residual_threshold=None):
     """
     Subtract a row-wise linear (1st order polynomial) fit from a 2D array.
     
@@ -36,12 +77,18 @@ def subtract_linear_fit(z):
     z : array_like, shape (lines, pixels)
         2D input array. Rows with partial NaN are fitted using valid points only.
         Rows that are entirely NaN remain NaN.
+    method : str, optional
+        'polyfit' (default) or 'RANSAC'.
+    residual_threshold : float, optional
+        RANSAC inlier threshold. If None, uses MAD (median absolute deviation).
+        Only used when method='RANSAC'.
     
     Returns
     -------
     np.ndarray
         Array with row-wise linear trends removed.
     """
+    _validate_method(method)
     z = np.asarray(z, dtype=float)
     lines, pixels = z.shape
     x = np.arange(pixels)
@@ -52,23 +99,33 @@ def subtract_linear_fit(z):
     
     result = np.full_like(z, np.nan)
     
-    if np.any(valid_rows):
-        valid_z = z[valid_rows]
-        coeffs = np.polyfit(x, valid_z.T, 1)
-        fitted = coeffs[0].reshape(-1, 1) * x + coeffs[1].reshape(-1, 1)
-        result[valid_rows] = valid_z - fitted
+    if method == 'polyfit':
+        if np.any(valid_rows):
+            valid_z = z[valid_rows]
+            coeffs = np.polyfit(x, valid_z.T, 1)
+            fitted = coeffs[0].reshape(-1, 1) * x + coeffs[1].reshape(-1, 1)
+            result[valid_rows] = valid_z - fitted
+        
+        for i in np.where(partial_rows)[0]:
+            valid_idx = ~np.isnan(z[i])
+            if np.sum(valid_idx) > 1:
+                popt = np.polyfit(x[valid_idx], z[i][valid_idx], 1)
+                fitted = popt[0] * x + popt[1]
+                result[i] = z[i] - fitted
     
-    for i in np.where(partial_rows)[0]:
-        valid_idx = ~np.isnan(z[i])
-        if np.sum(valid_idx) > 1:
-            popt = np.polyfit(x[valid_idx], z[i][valid_idx], 1)
-            fitted = popt[0] * x + popt[1]
-            result[i] = z[i] - fitted
+    elif method == 'RANSAC':
+        for i in np.where(~nan_rows)[0]:
+            valid_idx = ~np.isnan(z[i])
+            if np.sum(valid_idx) > 1:
+                fitted = _ransac_fit_1d(
+                    x[valid_idx], z[i][valid_idx], x, 1, residual_threshold
+                )
+                result[i] = z[i] - fitted
     
     return result
 
 
-def subtract_linear_fit_xy(z):
+def subtract_linear_fit_xy(z, method='polyfit', residual_threshold=None):
     """
     Subtract linear fits in both X (row-wise) and Y (column-wise) directions.
     
@@ -79,44 +136,29 @@ def subtract_linear_fit_xy(z):
     ----------
     z : array_like, shape (lines, pixels)
         2D input array.
+    method : str, optional
+        'polyfit' (default) or 'RANSAC'.
+    residual_threshold : float, optional
+        RANSAC inlier threshold. Only used when method='RANSAC'.
     
     Returns
     -------
     np.ndarray
         Array with linear trends removed in both directions.
     """
+    _validate_method(method)
     z = np.asarray(z, dtype=float)
     
     # X direction
-    z_x = subtract_linear_fit(z)
+    z_x = subtract_linear_fit(z, method, residual_threshold)
     
-    # Y direction
-    lines, pixels = z_x.shape
-    y = np.arange(lines)
+    # Y direction: transpose → row-wise fit → transpose back
+    z_xy = subtract_linear_fit(z_x.T, method, residual_threshold).T
     
-    nan_cols = np.isnan(z_x).all(axis=0)
-    partial_cols = np.isnan(z_x).any(axis=0) & ~nan_cols
-    valid_cols = ~np.isnan(z_x).any(axis=0)
-    
-    result = np.full_like(z_x, np.nan)
-    
-    if np.any(valid_cols):
-        valid_z = z_x[:, valid_cols]
-        coeffs = np.polyfit(y, valid_z, 1)
-        fitted = coeffs[0] * y.reshape(-1, 1) + coeffs[1]
-        result[:, valid_cols] = valid_z - fitted
-    
-    for j in np.where(partial_cols)[0]:
-        valid_idx = ~np.isnan(z_x[:, j])
-        if np.sum(valid_idx) > 1:
-            popt = np.polyfit(y[valid_idx], z_x[valid_idx, j], 1)
-            fitted = popt[0] * y + popt[1]
-            result[:, j] = z_x[:, j] - fitted
-    
-    return result
+    return z_xy
 
 
-def subtract_parabolic_fit(z):
+def subtract_parabolic_fit(z, method='polyfit', residual_threshold=None):
     """
     Subtract a row-wise parabolic (2nd order polynomial) fit from a 2D array.
     
@@ -125,12 +167,17 @@ def subtract_parabolic_fit(z):
     z : array_like, shape (lines, pixels)
         2D input array. Rows with partial NaN are fitted using valid points only.
         Rows that are entirely NaN remain NaN.
+    method : str, optional
+        'polyfit' (default) or 'RANSAC'.
+    residual_threshold : float, optional
+        RANSAC inlier threshold. Only used when method='RANSAC'.
     
     Returns
     -------
     np.ndarray
         Array with row-wise parabolic trends removed.
     """
+    _validate_method(method)
     z = np.asarray(z, dtype=float)
     lines, pixels = z.shape
     x = np.arange(pixels)
@@ -141,25 +188,35 @@ def subtract_parabolic_fit(z):
     
     result = np.full_like(z, np.nan)
     
-    if np.any(valid_rows):
-        valid_z = z[valid_rows]
-        coeffs = np.polyfit(x, valid_z.T, 2)
-        fitted = (coeffs[0].reshape(-1, 1) * (x ** 2) +
-                  coeffs[1].reshape(-1, 1) * x +
-                  coeffs[2].reshape(-1, 1))
-        result[valid_rows] = valid_z - fitted
+    if method == 'polyfit':
+        if np.any(valid_rows):
+            valid_z = z[valid_rows]
+            coeffs = np.polyfit(x, valid_z.T, 2)
+            fitted = (coeffs[0].reshape(-1, 1) * (x ** 2) +
+                      coeffs[1].reshape(-1, 1) * x +
+                      coeffs[2].reshape(-1, 1))
+            result[valid_rows] = valid_z - fitted
+        
+        for i in np.where(partial_rows)[0]:
+            valid_idx = ~np.isnan(z[i])
+            if np.sum(valid_idx) > 2:
+                popt = np.polyfit(x[valid_idx], z[i][valid_idx], 2)
+                fitted = popt[0] * (x ** 2) + popt[1] * x + popt[2]
+                result[i] = z[i] - fitted
     
-    for i in np.where(partial_rows)[0]:
-        valid_idx = ~np.isnan(z[i])
-        if np.sum(valid_idx) > 2:
-            popt = np.polyfit(x[valid_idx], z[i][valid_idx], 2)
-            fitted = popt[0] * (x ** 2) + popt[1] * x + popt[2]
-            result[i] = z[i] - fitted
+    elif method == 'RANSAC':
+        for i in np.where(~nan_rows)[0]:
+            valid_idx = ~np.isnan(z[i])
+            if np.sum(valid_idx) > 2:
+                fitted = _ransac_fit_1d(
+                    x[valid_idx], z[i][valid_idx], x, 2, residual_threshold
+                )
+                result[i] = z[i] - fitted
     
     return result
 
 
-def subtract_plane_fit(z):
+def subtract_plane_fit(z, method='polyfit', residual_threshold=None):
     """
     Subtract a best-fit plane from a 2D array.
     
@@ -167,19 +224,37 @@ def subtract_plane_fit(z):
     ----------
     z : array_like, shape (lines, pixels)
         2D input array.
+    method : str, optional
+        'polyfit' (default) or 'RANSAC'.
+    residual_threshold : float, optional
+        RANSAC inlier threshold. Only used when method='RANSAC'.
     
     Returns
     -------
     np.ndarray
         Array with the planar background removed.
     """
+    _validate_method(method)
     z = np.asarray(z, dtype=float)
     X, Y = np.meshgrid(np.arange(z.shape[1]), np.arange(z.shape[0]))
     
-    A = np.c_[X.flatten(), Y.flatten(), np.ones(z.size)]
-    C, _, _, _ = lstsq(A, z.flatten(), rcond=None)
+    if method == 'polyfit':
+        A = np.c_[X.flatten(), Y.flatten(), np.ones(z.size)]
+        C, _, _, _ = lstsq(A, z.flatten(), rcond=None)
+        plane = C[0] * X + C[1] * Y + C[2]
     
-    plane = C[0] * X + C[1] * Y + C[2]
+    elif method == 'RANSAC':
+        from sklearn.linear_model import RANSACRegressor, LinearRegression
+        
+        A = np.c_[X.flatten(), Y.flatten()]
+        kwargs = {}
+        if residual_threshold is not None:
+            kwargs['residual_threshold'] = residual_threshold
+        
+        ransac = RANSACRegressor(estimator=LinearRegression(), **kwargs)
+        ransac.fit(A, z.flatten())
+        plane = ransac.predict(A).reshape(z.shape)
+    
     return z - plane
 
 

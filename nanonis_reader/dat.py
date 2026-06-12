@@ -268,11 +268,20 @@ class iz:
             I = self.signals[resolved]
         return self.signals['Z rel (m)'], I
 
-    def barrier_height(self, fitting_current_range=(1e-12, 10e-12)): # fitting_current_range: current range in A unit.
+    def barrier_height(self, fitting_current_range=(1e-12, 10e-12), method='polyfit', residual_threshold=None):
         '''
+        Parameters
+        ----------
+        fitting_current_range : tuple, optional
+            (min, max) current range in A for fitting. Default (1pA, 10pA).
+        method : str, optional
+            'polyfit' (default) or 'RANSAC'.
+        residual_threshold : float, optional
+            RANSAC inlier threshold. Only used when method='RANSAC'.
+        
         Returns
         -------
-        float
+        tuple
             (apparent barrier height (eV), error (eV), z-spec slope (m**-1))
         '''
         def linear(x, barr, b):
@@ -283,7 +292,23 @@ class iz:
         idx = np.where( (fitting_current_range[0] <= I) & (I <= fitting_current_range[1]) ) # Filter with I
         ############################## Set fitting range ##############################
         
-        popt, pcov = curve_fit (linear, z[idx], np.log(I[idx]), p0 = [1.2, 1.2])
+        if method == 'RANSAC':
+            # Use RANSAC to identify inliers, then curve_fit on inliers for error bar
+            from sklearn.linear_model import RANSACRegressor, LinearRegression
+            X = z[idx].reshape(-1, 1)
+            kwargs = {}
+            if residual_threshold is not None:
+                kwargs['residual_threshold'] = residual_threshold
+            ransac = RANSACRegressor(estimator=LinearRegression(), **kwargs)
+            ransac.fit(X, np.log(I[idx]))
+            inlier_mask = ransac.inlier_mask_
+            
+            z_inlier = z[idx][inlier_mask]
+            I_inlier = I[idx][inlier_mask]
+            popt, pcov = curve_fit(linear, z_inlier, np.log(I_inlier), p0=[1.2, 1.2])
+        else:
+            popt, pcov = curve_fit(linear, z[idx], np.log(I[idx]), p0=[1.2, 1.2])
+        
         apparent_barrier_height, err = popt[0], np.sqrt(np.diag(pcov))[0]
         slope = -2*np.sqrt(2*0.51099895e+6*apparent_barrier_height)/(6.582119569e-16*2.99792458e+8)
 

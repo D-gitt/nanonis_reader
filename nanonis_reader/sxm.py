@@ -75,21 +75,21 @@ class topography:
         from . import image_processing as ip
         return ip.subtract_average(self.raw(scan_direction))
 
-    def subtract_linear_fit(self, scan_direction='fwd'):        
+    def subtract_linear_fit(self, scan_direction='fwd', method='polyfit', residual_threshold=None):        
         from . import image_processing as ip
-        return ip.subtract_linear_fit(self.raw(scan_direction))
+        return ip.subtract_linear_fit(self.raw(scan_direction), method, residual_threshold)
 
-    def subtract_linear_fit_xy(self, scan_direction='fwd'):
+    def subtract_linear_fit_xy(self, scan_direction='fwd', method='polyfit', residual_threshold=None):
         from . import image_processing as ip
-        return ip.subtract_linear_fit_xy(self.raw(scan_direction))
+        return ip.subtract_linear_fit_xy(self.raw(scan_direction), method, residual_threshold)
 
-    def subtract_parabolic_fit(self, scan_direction='fwd'):        
+    def subtract_parabolic_fit(self, scan_direction='fwd', method='polyfit', residual_threshold=None):        
         from . import image_processing as ip
-        return ip.subtract_parabolic_fit(self.raw(scan_direction))
+        return ip.subtract_parabolic_fit(self.raw(scan_direction), method, residual_threshold)
 
-    def subtract_plane_fit(self, scan_direction='fwd'):      
+    def subtract_plane_fit(self, scan_direction='fwd', method='polyfit', residual_threshold=None):      
         from . import image_processing as ip
-        return ip.subtract_plane_fit(self.raw(scan_direction))
+        return ip.subtract_plane_fit(self.raw(scan_direction), method, residual_threshold)
 
     def differentiate(self, scan_direction='fwd'):
         from . import image_processing as ip
@@ -152,13 +152,13 @@ class didvmap:
     def raw(self, scan_direction='fwd', channel='LI_Demod_1_X'):
         return self._get_channel(channel, scan_direction)
     
-    def subtract_linear_fit(self, scan_direction='fwd', channel='LI_Demod_1_X'):        
+    def subtract_linear_fit(self, scan_direction='fwd', channel='LI_Demod_1_X', method='polyfit', residual_threshold=None):        
         from . import image_processing as ip
-        return ip.subtract_linear_fit(self.raw(scan_direction, channel))
+        return ip.subtract_linear_fit(self.raw(scan_direction, channel), method, residual_threshold)
     
-    def subtract_linear_fit_xy(self, scan_direction='fwd', channel='LI_Demod_1_X'):
+    def subtract_linear_fit_xy(self, scan_direction='fwd', channel='LI_Demod_1_X', method='polyfit', residual_threshold=None):
         from . import image_processing as ip
-        return ip.subtract_linear_fit_xy(self.raw(scan_direction, channel))
+        return ip.subtract_linear_fit_xy(self.raw(scan_direction, channel), method, residual_threshold)
 
 
 # ═══════════════════════════════════════════════════════════════════

@@ -48,13 +48,13 @@ class topography:
         from . import image_processing as ip
         return ip.subtract_average(self.raw())
 
-    def subtract_linear_fit(self):        
+    def subtract_linear_fit(self, method='polyfit', residual_threshold=None):        
         from . import image_processing as ip
-        return ip.subtract_linear_fit(self.raw())
+        return ip.subtract_linear_fit(self.raw(), method, residual_threshold)
 
-    def subtract_parabolic_fit(self):        
+    def subtract_parabolic_fit(self, method='polyfit', residual_threshold=None):        
         from . import image_processing as ip
-        return ip.subtract_parabolic_fit(self.raw())
+        return ip.subtract_parabolic_fit(self.raw(), method, residual_threshold)
     
     def differentiate(self):
         from . import image_processing as ip
@@ -311,13 +311,24 @@ class iz:
     _HBAR_C = 6.582119569e-16 * 2.99792458e+8  # ℏc (eV·m)
     _ME = 0.51099895e+6  # electron mass (eV/c²)
 
-    def barrier_height(self, fitting_current_range=(1e-12, 10e-12), sweep_direction='fwd'):
+    def barrier_height(self, fitting_current_range=(1e-12, 10e-12), sweep_direction='fwd', method='polyfit', residual_threshold=None):
         """
         Apparent barrier height map (2D).
         
         Uses polyfit on ln(I) vs Z within the specified current range.
         Pre-computes log(|I|) for the entire 3D volume, then loops per-pixel
         because each pixel has a different fitting range.
+        
+        Parameters
+        ----------
+        fitting_current_range : tuple, optional
+            (min, max) current range in A for fitting. Default (1pA, 10pA).
+        sweep_direction : str, optional
+            'fwd', 'bwd', or 'AVG'.
+        method : str, optional
+            'polyfit' (default) or 'RANSAC'.
+        residual_threshold : float, optional
+            RANSAC inlier threshold. Only used when method='RANSAC'.
         
         Returns
         -------
@@ -346,16 +357,41 @@ class iz:
                     I_abs = I_3d[i, j]
                     log_I = log_I_3d[i, j]
                     idx = np.where((fitting_current_range[0] <= I_abs) & (I_abs <= fitting_current_range[1]))
-                    slope, intercept = np.polyfit(z[idx], log_I[idx], 1)
+                    
+                    if method == 'RANSAC':
+                        from sklearn.linear_model import RANSACRegressor, LinearRegression
+                        X = z[idx].reshape(-1, 1)
+                        kwargs = {}
+                        if residual_threshold is not None:
+                            kwargs['residual_threshold'] = residual_threshold
+                        ransac = RANSACRegressor(estimator=LinearRegression(), **kwargs)
+                        ransac.fit(X, log_I[idx])
+                        slope = ransac.estimator_.coef_[0]
+                    else:
+                        slope, intercept = np.polyfit(z[idx], log_I[idx], 1)
+                    
                     arr[i, j] = ((slope * self._HBAR_C / (-2))**2) / (2 * self._ME)
                 except Exception as e:
                     print(f'Estimation error at: {i, j}. {str(e)}')
                     arr[i, j] = np.nan
         return arr
 
-    def barrier_height_at(self, line, pixel, fitting_current_range=(1e-12, 10e-12), sweep_direction='fwd'):
+    def barrier_height_at(self, line, pixel, fitting_current_range=(1e-12, 10e-12), sweep_direction='fwd', method='polyfit', residual_threshold=None):
         """
         Apparent barrier height at a single pixel.
+        
+        Parameters
+        ----------
+        line, pixel : int
+            Grid position.
+        fitting_current_range : tuple, optional
+            (min, max) current range in A for fitting.
+        sweep_direction : str, optional
+            'fwd', 'bwd', or 'AVG'.
+        method : str, optional
+            'polyfit' (default) or 'RANSAC'.
+        residual_threshold : float, optional
+            RANSAC inlier threshold. Only used when method='RANSAC'.
         
         Returns
         -------
@@ -375,7 +411,19 @@ class iz:
         
         log_I = np.log(I_abs)
         idx = np.where((fitting_current_range[0] <= I_abs) & (I_abs <= fitting_current_range[1]))
-        slope, intercept = np.polyfit(z[idx], log_I[idx], 1)
+        
+        if method == 'RANSAC':
+            from sklearn.linear_model import RANSACRegressor, LinearRegression
+            X = z[idx].reshape(-1, 1)
+            kwargs = {}
+            if residual_threshold is not None:
+                kwargs['residual_threshold'] = residual_threshold
+            ransac = RANSACRegressor(estimator=LinearRegression(), **kwargs)
+            ransac.fit(X, log_I[idx])
+            slope = ransac.estimator_.coef_[0]
+        else:
+            slope, intercept = np.polyfit(z[idx], log_I[idx], 1)
+        
         return ((slope * self._HBAR_C / (-2))**2) / (2 * self._ME)
 
 
