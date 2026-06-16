@@ -6,7 +6,7 @@ with open('README.md', 'r', encoding='utf-8') as f:
 
 setup(
     name='nanonis_reader',
-    version='0.2.3',
+    version='0.3.0',
     description='A Python package for reading STM experimental data files obtained from Nanonis, based on nanonispy',
     long_description=long_description,  # Set long_description
     long_description_content_type='text/markdown',  # Specify Markdown format
@@ -17,16 +17,18 @@ setup(
         'matplotlib',
         'numpy',
         'python-pptx',
+        'scikit-learn',
         'scipy'
     ],
     packages=find_packages(exclude=[]),
     keywords=['nanonis', 'reader', 'nanonispy', 'STM data', 'scientific data analysis'],
-    python_requires='>=3.6',
+    python_requires='>=3.8',
     classifiers=[
-        'Programming Language :: Python :: 3.6',
-        'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
+        'Programming Language :: Python :: 3.12',
         'License :: OSI Approved :: MIT License',
         'Operating System :: OS Independent',
     ],
