@@ -1,5 +1,5 @@
 import numpy as np
-import re
+
 from math import factorial
 from scipy.optimize import curve_fit
 try:
@@ -119,12 +119,13 @@ def get_channel_name(base_channel, sweep_direction='fwd', sweep_index=None):
     """
     # Strip unit suffix for tag insertion
     # e.g., 'LI Demod 1 X (A)' → ('LI Demod 1 X', '(A)')
-    match = re.match(r'^(.*?)\s*(\([^)]*\))$', base_channel.strip())
-    if match:
-        channel_base = match.group(1).strip()
-        unit = match.group(2)
+    ch = base_channel.strip()
+    if ch.endswith(')') and '(' in ch:
+        idx = ch.rfind('(')
+        channel_base = ch[:idx].strip()
+        unit = ch[idx:]
     else:
-        channel_base = base_channel
+        channel_base = ch
         unit = ''
     
     tags = []
@@ -179,21 +180,47 @@ def find_sweep_channels(signals, base_channel, sweep_direction='fwd'):
     list[str]
         Sorted list of matching channel names.
     """
-    match = re.match(r'^(.*?)\s*(\([^)]*\))$', base_channel.strip())
-    if match:
-        channel_base = re.escape(match.group(1).strip())
-        unit = re.escape(match.group(2))
+    ch = base_channel.strip()
+    if ch.endswith(')') and '(' in ch:
+        idx = ch.rfind('(')
+        channel_base = ch[:idx].strip()
+        unit = ch[idx:]
     else:
-        channel_base = re.escape(base_channel)
+        channel_base = ch
         unit = ''
     
-    if sweep_direction == 'bwd':
-        pattern = re.compile(rf'^{channel_base}\s+\[\d{{5}}\]\s+\[bwd\]\s+{unit}$')
-    else:
-        # fwd: must NOT contain [bwd]
-        pattern = re.compile(rf'^{channel_base}\s+\[\d{{5}}\]\s+{unit}$')
-    
-    matched = sorted([key for key in signals.keys() if pattern.match(key)])
+    matched = []
+    for key in sorted(signals.keys()):
+        if not key.startswith(channel_base):
+            continue
+        if unit and not key.endswith(unit):
+            continue
+        # Must contain [NNNNN] (5-digit index)
+        if '[' not in key:
+            continue
+        # Check for 5-digit index bracket tag
+        has_index = False
+        pos = 0
+        while True:
+            start = key.find('[', pos)
+            if start == -1:
+                break
+            end = key.find(']', start)
+            if end == -1:
+                break
+            tag = key[start+1:end]
+            if tag.isdigit() and len(tag) == 5:
+                has_index = True
+                break
+            pos = end + 1
+        if not has_index:
+            continue
+        has_bwd = '[bwd]' in key
+        if sweep_direction == 'bwd' and not has_bwd:
+            continue
+        if sweep_direction != 'bwd' and has_bwd:
+            continue
+        matched.append(key)
     return matched
 
 
