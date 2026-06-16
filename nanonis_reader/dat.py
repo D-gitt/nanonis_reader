@@ -268,7 +268,7 @@ class iz:
             I = self.signals[resolved]
         return self.signals['Z rel (m)'], I
 
-    def barrier_height(self, fitting_current_range=(1e-12, 10e-12), method='polyfit', residual_threshold=None):
+    def barrier_height(self, fitting_current_range=(1e-12, 10e-12), method='polyfit', **ransac_kwargs):
         '''
         Parameters
         ----------
@@ -276,8 +276,8 @@ class iz:
             (min, max) current range in A for fitting. Default (1pA, 10pA).
         method : str, optional
             'polyfit' (default) or 'RANSAC'.
-        residual_threshold : float, optional
-            RANSAC inlier threshold. Only used when method='RANSAC'.
+        **ransac_kwargs
+            Passed to RANSACRegressor when method='RANSAC'.
         
         Returns
         -------
@@ -296,10 +296,7 @@ class iz:
             # Use RANSAC to identify inliers, then curve_fit on inliers for error bar
             from sklearn.linear_model import RANSACRegressor, LinearRegression
             X = z[idx].reshape(-1, 1)
-            kwargs = {}
-            if residual_threshold is not None:
-                kwargs['residual_threshold'] = residual_threshold
-            ransac = RANSACRegressor(estimator=LinearRegression(), **kwargs)
+            ransac = RANSACRegressor(estimator=LinearRegression(), **ransac_kwargs)
             ransac.fit(X, np.log(I[idx]))
             inlier_mask = ransac.inlier_mask_
             

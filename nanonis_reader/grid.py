@@ -48,13 +48,13 @@ class topography:
         from . import image_processing as ip
         return ip.subtract_average(self.raw())
 
-    def subtract_linear_fit(self, method='polyfit', residual_threshold=None):        
+    def subtract_linear_fit(self, method='polyfit', **ransac_kwargs):        
         from . import image_processing as ip
-        return ip.subtract_linear_fit(self.raw(), method, residual_threshold)
+        return ip.subtract_linear_fit(self.raw(), method, **ransac_kwargs)
 
-    def subtract_parabolic_fit(self, method='polyfit', residual_threshold=None):        
+    def subtract_parabolic_fit(self, method='polyfit', **ransac_kwargs):        
         from . import image_processing as ip
-        return ip.subtract_parabolic_fit(self.raw(), method, residual_threshold)
+        return ip.subtract_parabolic_fit(self.raw(), method, **ransac_kwargs)
     
     def differentiate(self):
         from . import image_processing as ip
@@ -311,7 +311,7 @@ class iz:
     _HBAR_C = 6.582119569e-16 * 2.99792458e+8  # ℏc (eV·m)
     _ME = 0.51099895e+6  # electron mass (eV/c²)
 
-    def barrier_height(self, fitting_current_range=(1e-12, 10e-12), sweep_direction='fwd', method='polyfit', residual_threshold=None):
+    def barrier_height(self, fitting_current_range=(1e-12, 10e-12), sweep_direction='fwd', method='polyfit', **ransac_kwargs):
         """
         Apparent barrier height map (2D).
         
@@ -327,8 +327,8 @@ class iz:
             'fwd', 'bwd', or 'AVG'.
         method : str, optional
             'polyfit' (default) or 'RANSAC'.
-        residual_threshold : float, optional
-            RANSAC inlier threshold. Only used when method='RANSAC'.
+        **ransac_kwargs
+            Passed to RANSACRegressor when method='RANSAC'.
         
         Returns
         -------
@@ -361,10 +361,7 @@ class iz:
                     if method == 'RANSAC':
                         from sklearn.linear_model import RANSACRegressor, LinearRegression
                         X = z[idx].reshape(-1, 1)
-                        kwargs = {}
-                        if residual_threshold is not None:
-                            kwargs['residual_threshold'] = residual_threshold
-                        ransac = RANSACRegressor(estimator=LinearRegression(), **kwargs)
+                        ransac = RANSACRegressor(estimator=LinearRegression(), **ransac_kwargs)
                         ransac.fit(X, log_I[idx])
                         slope = ransac.estimator_.coef_[0]
                     else:
@@ -376,7 +373,7 @@ class iz:
                     arr[i, j] = np.nan
         return arr
 
-    def barrier_height_at(self, line, pixel, fitting_current_range=(1e-12, 10e-12), sweep_direction='fwd', method='polyfit', residual_threshold=None):
+    def barrier_height_at(self, line, pixel, fitting_current_range=(1e-12, 10e-12), sweep_direction='fwd', method='polyfit', **ransac_kwargs):
         """
         Apparent barrier height at a single pixel.
         
@@ -390,8 +387,8 @@ class iz:
             'fwd', 'bwd', or 'AVG'.
         method : str, optional
             'polyfit' (default) or 'RANSAC'.
-        residual_threshold : float, optional
-            RANSAC inlier threshold. Only used when method='RANSAC'.
+        **ransac_kwargs
+            Passed to RANSACRegressor when method='RANSAC'.
         
         Returns
         -------
@@ -415,10 +412,7 @@ class iz:
         if method == 'RANSAC':
             from sklearn.linear_model import RANSACRegressor, LinearRegression
             X = z[idx].reshape(-1, 1)
-            kwargs = {}
-            if residual_threshold is not None:
-                kwargs['residual_threshold'] = residual_threshold
-            ransac = RANSACRegressor(estimator=LinearRegression(), **kwargs)
+            ransac = RANSACRegressor(estimator=LinearRegression(), **ransac_kwargs)
             ransac.fit(X, log_I[idx])
             slope = ransac.estimator_.coef_[0]
         else:

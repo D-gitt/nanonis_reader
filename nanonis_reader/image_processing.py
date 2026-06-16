@@ -13,9 +13,22 @@ def _validate_method(method):
     if method not in ('polyfit', 'RANSAC'):
         raise ValueError(f"method must be 'polyfit' or 'RANSAC', got '{method}'")
 
-def _ransac_fit_1d(x_fit, z_fit, x_predict, degree, residual_threshold=None):
+def _ransac_fit_1d(x_fit, z_fit, x_predict, degree, **ransac_kwargs):
     """
     RANSAC polynomial fit on (x_fit, z_fit), predict on x_predict.
+    
+    Parameters
+    ----------
+    x_fit, z_fit : array_like
+        Training data.
+    x_predict : array_like
+        Points at which to predict.
+    degree : int
+        Polynomial degree (1=linear, 2=parabolic, ...).
+    **ransac_kwargs
+        Passed directly to sklearn.linear_model.RANSACRegressor.
+        Common options: residual_threshold, max_trials, stop_probability,
+        min_samples, random_state, loss.
     
     Returns
     -------
@@ -34,16 +47,11 @@ def _ransac_fit_1d(x_fit, z_fit, x_predict, degree, residual_threshold=None):
             PolynomialFeatures(degree, include_bias=False),
             LinearRegression()
         )
+        ransac_kwargs.setdefault('min_samples', degree + 1)
     else:
         estimator = LinearRegression()
     
-    kwargs = {}
-    if residual_threshold is not None:
-        kwargs['residual_threshold'] = residual_threshold
-    if degree > 1:
-        kwargs['min_samples'] = degree + 1
-    
-    ransac = RANSACRegressor(estimator=estimator, **kwargs)
+    ransac = RANSACRegressor(estimator=estimator, **ransac_kwargs)
     ransac.fit(X_fit, z_fit)
     return ransac.predict(X_pred)
 
@@ -68,7 +76,7 @@ def subtract_average(z):
         return z - np.nanmean(z, axis=1, keepdims=True)
 
 
-def subtract_linear_fit(z, method='polyfit', residual_threshold=None):
+def subtract_linear_fit(z, method='polyfit', **ransac_kwargs):
     """
     Subtract a row-wise linear (1st order polynomial) fit from a 2D array.
     
@@ -79,9 +87,9 @@ def subtract_linear_fit(z, method='polyfit', residual_threshold=None):
         Rows that are entirely NaN remain NaN.
     method : str, optional
         'polyfit' (default) or 'RANSAC'.
-    residual_threshold : float, optional
-        RANSAC inlier threshold. If None, uses MAD (median absolute deviation).
-        Only used when method='RANSAC'.
+    **ransac_kwargs
+        Passed to RANSACRegressor when method='RANSAC'.
+        Common: residual_threshold, max_trials, random_state.
     
     Returns
     -------
@@ -118,14 +126,14 @@ def subtract_linear_fit(z, method='polyfit', residual_threshold=None):
             valid_idx = ~np.isnan(z[i])
             if np.sum(valid_idx) > 1:
                 fitted = _ransac_fit_1d(
-                    x[valid_idx], z[i][valid_idx], x, 1, residual_threshold
+                    x[valid_idx], z[i][valid_idx], x, 1, **ransac_kwargs
                 )
                 result[i] = z[i] - fitted
     
     return result
 
 
-def subtract_linear_fit_xy(z, method='polyfit', residual_threshold=None):
+def subtract_linear_fit_xy(z, method='polyfit', **ransac_kwargs):
     """
     Subtract linear fits in both X (row-wise) and Y (column-wise) directions.
     
@@ -138,8 +146,8 @@ def subtract_linear_fit_xy(z, method='polyfit', residual_threshold=None):
         2D input array.
     method : str, optional
         'polyfit' (default) or 'RANSAC'.
-    residual_threshold : float, optional
-        RANSAC inlier threshold. Only used when method='RANSAC'.
+    **ransac_kwargs
+        Passed to RANSACRegressor when method='RANSAC'.
     
     Returns
     -------
@@ -150,15 +158,15 @@ def subtract_linear_fit_xy(z, method='polyfit', residual_threshold=None):
     z = np.asarray(z, dtype=float)
     
     # X direction
-    z_x = subtract_linear_fit(z, method, residual_threshold)
+    z_x = subtract_linear_fit(z, method, **ransac_kwargs)
     
     # Y direction: transpose → row-wise fit → transpose back
-    z_xy = subtract_linear_fit(z_x.T, method, residual_threshold).T
+    z_xy = subtract_linear_fit(z_x.T, method, **ransac_kwargs).T
     
     return z_xy
 
 
-def subtract_parabolic_fit(z, method='polyfit', residual_threshold=None):
+def subtract_parabolic_fit(z, method='polyfit', **ransac_kwargs):
     """
     Subtract a row-wise parabolic (2nd order polynomial) fit from a 2D array.
     
@@ -169,8 +177,8 @@ def subtract_parabolic_fit(z, method='polyfit', residual_threshold=None):
         Rows that are entirely NaN remain NaN.
     method : str, optional
         'polyfit' (default) or 'RANSAC'.
-    residual_threshold : float, optional
-        RANSAC inlier threshold. Only used when method='RANSAC'.
+    **ransac_kwargs
+        Passed to RANSACRegressor when method='RANSAC'.
     
     Returns
     -------
@@ -209,14 +217,14 @@ def subtract_parabolic_fit(z, method='polyfit', residual_threshold=None):
             valid_idx = ~np.isnan(z[i])
             if np.sum(valid_idx) > 2:
                 fitted = _ransac_fit_1d(
-                    x[valid_idx], z[i][valid_idx], x, 2, residual_threshold
+                    x[valid_idx], z[i][valid_idx], x, 2, **ransac_kwargs
                 )
                 result[i] = z[i] - fitted
     
     return result
 
 
-def subtract_plane_fit(z, method='polyfit', residual_threshold=None):
+def subtract_plane_fit(z, method='polyfit', **ransac_kwargs):
     """
     Subtract a best-fit plane from a 2D array.
     
@@ -226,8 +234,8 @@ def subtract_plane_fit(z, method='polyfit', residual_threshold=None):
         2D input array.
     method : str, optional
         'polyfit' (default) or 'RANSAC'.
-    residual_threshold : float, optional
-        RANSAC inlier threshold. Only used when method='RANSAC'.
+    **ransac_kwargs
+        Passed to RANSACRegressor when method='RANSAC'.
     
     Returns
     -------
@@ -247,11 +255,7 @@ def subtract_plane_fit(z, method='polyfit', residual_threshold=None):
         from sklearn.linear_model import RANSACRegressor, LinearRegression
         
         A = np.c_[X.flatten(), Y.flatten()]
-        kwargs = {}
-        if residual_threshold is not None:
-            kwargs['residual_threshold'] = residual_threshold
-        
-        ransac = RANSACRegressor(estimator=LinearRegression(), **kwargs)
+        ransac = RANSACRegressor(estimator=LinearRegression(), **ransac_kwargs)
         ransac.fit(A, z.flatten())
         plane = ransac.predict(A).reshape(z.shape)
     
